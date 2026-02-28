@@ -2,31 +2,38 @@
 
 ## Sistema completo en **un solo archivo**
 
-Ahora todo el sistema está incluido en **`HFTCryptoArbitrage.py`** y cumple todas las funciones en un único GUI principal:
+Todo el sistema principal está en **`HFTCryptoArbitrage.py`**.
 
-1. **Configuración**
-   - API keys, mercado, red, fee, filtros de ganancia limpia.
-2. **Scanner**
+### Pestañas incluidas en el GUI principal
+
+1. **⚙️ Configuración**
+   - API keys, mercado, red, fee y filtros de ganancia limpia.
+   - Validación de conectividad.
+2. **🔍 Scanner**
    - Escaneo y ranking de rutas rentables netas.
-3. **Estadística / interés compuesto**
-   - KPIs, historial y simulación compuesta.
-4. **Ejecución unificada Binance (AI + Scanner)**
+   - KPI cards, filtro en tiempo real y resaltado de mejor oportunidad.
+3. **📈 Estadísticas**
+   - Historial de escaneos.
+   - Simulación de interés compuesto.
+   - Gráfico ASCII simple de evolución.
+4. **🚀 Ejecución Unificada**
    - IA de señal sobre Binance.
-   - Cruce automático con scanner limpio para decidir si existe ruta favorable.
-   - Tabla visible de **traders ejecutados**.
+   - Cruce automático con scanner limpio.
+   - Registro visible de traders ejecutados.
 
-## Incluido dentro de `HFTCryptoArbitrage.py`
+### Mejoras UX/robustez
 
-- Scanner triangular Binance (Spot/Perpetual, Mainnet/Testnet) dentro de `HFTCryptoArbitrage.py`.
-- Cálculo neto limpio con fees por ciclo.
-- Simulación de interés compuesto con trigger.
-- Motor IA ligero para señal Binance/Bybit.
-- GUI profesional y robusta con validaciones.
+- Tema claro/oscuro configurable.
+- Toolbar superior y status bar inferior fija.
+- Indicador visual de operación en curso + progressbar.
+- Logs por nivel (INFO/WARN/ERROR).
+- Atajos: `Ctrl+S` guardar, `F5` escanear, `Esc` detener autoscan.
+- Confirmación para operación crítica en modo operativo.
 
-## Ejecución
+## Ejecutar
 
 ```bash
 python3 HFTCryptoArbitrage.py
 ```
 
-> `main.py` queda sólo como compatibilidad (entrypoint). El flujo principal queda unificado en `HFTCryptoArbitrage.py`.
+> `main.py` se mantiene solo como entrada de compatibilidad.
