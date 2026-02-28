@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import threading
 import tkinter as tk
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from tkinter import messagebox, ttk
 
@@ -276,7 +276,7 @@ class ArbitrageApp:
         self._append_history(output)
 
     def _append_history(self, output: ScanOutput):
-        ts = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+        ts = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
         row = (
             ts,
             output.stats.market_type,

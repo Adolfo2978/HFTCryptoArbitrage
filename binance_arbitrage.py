@@ -78,7 +78,7 @@ class BinanceArbitrageScanner:
 
     def _api_base_url(self) -> str:
         if self.market_type == "spot":
-            return "https://testnet.binance.vision" if self.testnet else "https://api.binance.com"
+            return "https://testnet.binance.vision/" if self.testnet else "https://api.binance.com"
         if self.market_type == "perpetual":
             return "https://testnet.binancefuture.com" if self.testnet else "https://fapi.binance.com"
         raise ValueError("market_type debe ser 'spot' o 'perpetual'")
@@ -100,7 +100,7 @@ class BinanceArbitrageScanner:
 
     def _get(self, endpoint: str, params: Optional[dict] = None):
         query = f"?{urlencode(params)}" if params else ""
-        url = f"{self._api_base_url()}{endpoint}{query}"
+        url = f"{self._api_base_url().rstrip('/')}{endpoint}{query}"
         try:
             with urlopen(url, timeout=self.timeout) as response:  # nosec B310
                 return json.loads(response.read().decode("utf-8"))
