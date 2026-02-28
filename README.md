@@ -23,6 +23,8 @@ Todo el sistema principal está en **`HFTCryptoArbitrage.py`**.
 
 ### Mejoras UX/robustez
 
+- Barra de menú superior (Archivo / Scanner / Ayuda) para una navegación más profesional.
+- Header limpio (sin saturación de botones) con selector de tema.
 - Tema claro/oscuro configurable.
 - Toolbar superior y status bar inferior fija.
 - Indicador visual de operación en curso + progressbar.

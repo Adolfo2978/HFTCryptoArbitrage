@@ -487,7 +487,10 @@ class ArbitrageApp:
         self.style.configure("TLabel", background=bg, foreground=fg, font=("Segoe UI", 10))
         self.style.configure("TCheckbutton", background=bg, foreground=fg)
         self.style.configure("TNotebook", background=bg)
-        self.style.configure("TNotebook.Tab", padding=(14, 8), font=("Segoe UI", 10, "bold"))
+        self.style.configure("TNotebook.Tab", padding=(16, 10), font=("Segoe UI", 10, "bold"))
+        self.style.configure("TButton", font=("Segoe UI", 9, "bold"), padding=6)
+        self.style.configure("Primary.TButton", foreground="#ffffff")
+        self.style.configure("Success.TButton", foreground="#ffffff")
         self.style.configure("Card.TFrame", background=card, relief="solid", borderwidth=1)
         self.style.configure("CardTitle.TLabel", background=card, foreground=fg, font=("Segoe UI", 9))
         self.style.configure("CardValue.TLabel", background=card, foreground="#10b981" if dark else "#047857", font=("Segoe UI", 14, "bold"))
@@ -495,19 +498,23 @@ class ArbitrageApp:
 
     def _build_ui(self):
         self.root.columnconfigure(0, weight=1)
-        self.root.rowconfigure(1, weight=1)
+        self.root.rowconfigure(2, weight=1)
 
-        # Toolbar
-        toolbar = ttk.Frame(self.root)
-        toolbar.grid(row=0, column=0, sticky="ew", padx=8, pady=(8, 4))
-        ttk.Button(toolbar, text="💾 Guardar", command=self._save_config).pack(side="left", padx=3)
-        ttk.Button(toolbar, text="🔍 Escanear", command=self._scan_once).pack(side="left", padx=3)
-        ttk.Button(toolbar, text="▶ Flujo Unificado", command=self._run_unified_flow).pack(side="left", padx=3)
-        ttk.Button(toolbar, text="❌ Cancelar AutoScan", command=self._stop_autoscan).pack(side="left", padx=3)
-        ttk.Checkbutton(toolbar, text="Tema oscuro", variable=self.dark_mode, command=self._apply_theme).pack(side="right", padx=4)
+        self._build_menu_bar()
+
+        header = ttk.Frame(self.root, style="Card.TFrame", padding=10)
+        header.grid(row=1, column=0, sticky="ew", padx=8, pady=(8, 4))
+        left = ttk.Frame(header)
+        left.pack(side="left")
+        ttk.Label(left, text="🚀 HFTCryptoArbitrage", font=("Segoe UI", 14, "bold")).pack(anchor="w")
+        ttk.Label(left, text="Sistema Unificado de Arbitraje Binance", font=("Segoe UI", 9)).pack(anchor="w")
+
+        right = ttk.Frame(header)
+        right.pack(side="right")
+        ttk.Checkbutton(right, text="Tema oscuro", variable=self.dark_mode, command=self._apply_theme).pack(side="right", padx=4)
 
         notebook = ttk.Notebook(self.root)
-        notebook.grid(row=1, column=0, sticky="nsew", padx=8, pady=4)
+        notebook.grid(row=2, column=0, sticky="nsew", padx=8, pady=4)
 
         self.tab_config = ttk.Frame(notebook, padding=12)
         self.tab_scan = ttk.Frame(notebook, padding=12)
@@ -526,9 +533,32 @@ class ArbitrageApp:
 
         self._build_statusbar()
 
+    def _build_menu_bar(self):
+        menubar = tk.Menu(self.root)
+
+        file_menu = tk.Menu(menubar, tearoff=0)
+        file_menu.add_command(label="Guardar configuración", command=self._save_config, accelerator="Ctrl+S")
+        file_menu.add_separator()
+        file_menu.add_command(label="Salir", command=self.root.quit)
+        menubar.add_cascade(label="Archivo", menu=file_menu)
+
+        scan_menu = tk.Menu(menubar, tearoff=0)
+        scan_menu.add_command(label="Escanear ahora", command=self._scan_once, accelerator="F5")
+        scan_menu.add_command(label="Auto-scan ON", command=self._start_autoscan)
+        scan_menu.add_command(label="Auto-scan OFF", command=self._stop_autoscan, accelerator="Esc")
+        scan_menu.add_separator()
+        scan_menu.add_command(label="Flujo unificado", command=self._run_unified_flow)
+        menubar.add_cascade(label="Scanner", menu=scan_menu)
+
+        help_menu = tk.Menu(menubar, tearoff=0)
+        help_menu.add_command(label="Ayuda", command=self._show_help)
+        menubar.add_cascade(label="Ayuda", menu=help_menu)
+
+        self.root.config(menu=menubar)
+
     def _build_statusbar(self):
         status = ttk.Frame(self.root)
-        status.grid(row=2, column=0, sticky="ew", padx=8, pady=(2, 8))
+        status.grid(row=3, column=0, sticky="ew", padx=8, pady=(2, 8))
         self.dot = tk.Label(status, text="●", fg="#6b7280")
         self.dot.pack(side="left", padx=(0, 6))
         ttk.Label(status, textvariable=self.status_var, style="Status.TLabel").pack(side="left")
@@ -614,8 +644,8 @@ class ArbitrageApp:
 
         ctrl = ttk.Frame(f)
         ctrl.grid(row=0, column=0, sticky="ew")
-        ttk.Button(ctrl, text="Escanear ahora", command=self._scan_once).pack(side="left", padx=4)
-        ttk.Button(ctrl, text="Auto-scan ON", command=self._start_autoscan).pack(side="left", padx=4)
+        ttk.Button(ctrl, text="Escanear ahora", style="Primary.TButton", command=self._scan_once).pack(side="left", padx=4)
+        ttk.Button(ctrl, text="Auto-scan ON", style="Success.TButton", command=self._start_autoscan).pack(side="left", padx=4)
         ttk.Button(ctrl, text="Auto-scan OFF", command=self._stop_autoscan).pack(side="left", padx=4)
 
         ttk.Label(ctrl, text="Filtro rápido:").pack(side="left", padx=(20, 6))
@@ -709,6 +739,12 @@ class ArbitrageApp:
             self.trade_tree.heading(c, text=c)
             self.trade_tree.column(c, width=tw[c], anchor="center")
         self.trade_tree.grid(row=11, column=0, columnspan=2, sticky="nsew", pady=4)
+
+    def _focus_filter(self):
+        try:
+            self.root.focus_get()
+        except Exception:
+            pass
 
     def _bind_shortcuts(self):
         self.root.bind_all("<Control-s>", lambda _e: self._save_config())
