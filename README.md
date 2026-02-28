@@ -1,31 +1,37 @@
 # HFTCryptoArbitrage
 
-Aplicación para análisis de arbitraje triangular en Binance con **base USDT** y ciclo completo **USDT -> A -> B -> USDT**, incluyendo ventana principal para configuración de API y escaneo en tiempo real.
+Plataforma de arbitraje triangular en Binance con GUI mejorada, soporte de **Spot/Perpetuals** y selección de **Mainnet/Testnet**.
 
-## ¿Qué se mejoró?
+## Novedades principales
 
-- Se añadió una **ventana principal (`main.py`)** con menú/pestañas para:
-  - introducir `API Key` y `API Secret`,
-  - configurar capital base USDT,
-  - configurar fee por trade,
-  - lanzar escaneo manual o automático.
-- Se añadió un motor robusto de arbitraje en `binance_arbitrage.py` que:
-  - descarga mercados spot de Binance,
-  - construye rutas triangulares válidas,
-  - calcula retorno estimado por ruta usando `bid/ask` + fee,
-  - prioriza oportunidades por `% de beneficio`.
-- Se mantuvo enfoque de seguridad: no hay ejecución automática de órdenes en vivo.
+- Ventana principal (`main.py`) con entorno gráfico ampliado:
+  - configuración de API Key/Secret,
+  - selector de mercado (`spot` o `perpetual`),
+  - selector de red (`mainnet` o `testnet`),
+  - escaneo manual y automático,
+  - panel KPI en tiempo real (ms de scan, tasa de éxito, mejor profit, profit promedio),
+  - historial de escaneos,
+  - detalle trader para cada ruta seleccionada.
 
-## Importante sobre rentabilidad
+- Motor de arbitraje (`binance_arbitrage.py`) mejorado:
+  - soporte API Spot y Futures USDT-M Perpetual,
+  - endpoints productivos y testnet,
+  - evaluación de rutas `USDT -> A -> B -> USDT`,
+  - estadísticas completas por escaneo:
+    - rutas analizadas,
+    - rutas rentables,
+    - tasa de éxito,
+    - mejor/avg/mediana de profit,
+    - tiempo total de ejecución.
 
-No es posible garantizar que "todo sea rentable" de forma permanente en arbitraje real.
-Este sistema muestra **rentabilidad estimada** antes de:
+## Importante sobre “éxito completo”
+
+El sistema entrega **éxito analítico y operativo** (escaneo robusto + métricas + detalle),
+pero no puede garantizar rentabilidad constante en mercado real por:
 - slippage,
-- latencia de red,
-- límites de tamaño mínimo,
-- cambios rápidos del order book.
-
-Aun así, el sistema está diseñado para ayudarte a detectar oportunidades de forma más eficiente.
+- latencia,
+- cambios del libro,
+- límites de tamaño y comisiones dinámicas.
 
 ## Instalación
 
@@ -33,19 +39,21 @@ Aun así, el sistema está diseñado para ayudarte a detectar oportunidades de f
 python3 -m pip install -r requirements.txt
 ```
 
-## Ejecutar la ventana principal
+## Ejecutar GUI
 
 ```bash
 python3 main.py
 ```
 
-## Ejecutar scanner por script (sin GUI)
+## Ejecutar scanner por script
 
 ```bash
 python3 binance_arbitrage.py
 ```
 
-## Dependencias
+## Recomendación de uso
 
-- `requests` para Binance API pública.
-- `numpy/pandas/pybit` se mantienen para módulos previos del repo.
+1. Comenzar en **testnet**.
+2. Ajustar fee real de tu cuenta.
+3. Revisar KPI de tasa de éxito y profit medio.
+4. Pasar a mainnet sólo tras validación de latencia/ejecución.
