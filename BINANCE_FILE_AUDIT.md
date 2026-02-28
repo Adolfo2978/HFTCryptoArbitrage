@@ -2,7 +2,7 @@
 
 ## Estado general
 
-- ✅ Flujo principal unificado en `main.py`.
+- ✅ Flujo principal unificado en `HFTCryptoArbitrage.py`.
 - ✅ Scanner y métricas de arbitraje en `binance_arbitrage.py`.
 - ✅ Señal IA con soporte Binance en `ai_signal_system.py`.
 - ⚠️ `Test_bybit.py` permanece para compatibilidad legacy.
@@ -11,7 +11,7 @@
 
 ### Núcleo productivo
 
-- `main.py` ✅
+- `HFTCryptoArbitrage.py` ✅
   - 4 pestañas en un solo GUI.
   - vista de traders ejecutados.
   - validaciones de entrada.
