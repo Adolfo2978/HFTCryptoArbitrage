@@ -1,16 +1,15 @@
-"""Binance triangular arbitrage scanner (USDT base/end) for Spot and USDT Perpetuals."""
+"""Binance triangular arbitrage scanner (USDT base/end) with clean-profit and compound simulation."""
 
 from __future__ import annotations
 
+import json
 import time
 from dataclasses import dataclass
 from statistics import median
-from typing import Dict, Iterable, List, Optional, Tuple
-
-import json
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import urlopen
+from typing import Dict, Iterable, List, Optional, Tuple
 
 
 @dataclass(frozen=True)
@@ -26,8 +25,12 @@ class ArbitrageResult:
     path: Tuple[str, str, str, str]
     symbols: Tuple[str, str, str]
     sides: Tuple[str, str, str]
+    gross_final_usdt: float
     final_usdt: float
+    total_fees_usdt: float
+    net_profit_usdt: float
     profit_pct: float
+    is_clean_profitable: bool
 
 
 @dataclass
@@ -35,7 +38,8 @@ class ScanStats:
     market_type: str
     testnet: bool
     scanned_paths: int
-    profitable_paths: int
+    valid_paths: int
+    clean_profitable_paths: int
     success_rate_pct: float
     best_profit_pct: float
     avg_profit_pct: float
@@ -47,6 +51,17 @@ class ScanStats:
 class ScanOutput:
     opportunities: List[ArbitrageResult]
     stats: ScanStats
+
+
+@dataclass
+class CompoundPlanResult:
+    initial_capital: float
+    current_capital: float
+    cycles_simulated: int
+    trigger_reached: bool
+    trigger_cycle: int
+    stake_mode: str
+    per_cycle_net_pct: float
 
 
 class BinanceArbitrageScanner:
@@ -87,7 +102,7 @@ class BinanceArbitrageScanner:
         query = f"?{urlencode(params)}" if params else ""
         url = f"{self._api_base_url()}{endpoint}{query}"
         try:
-            with urlopen(url, timeout=self.timeout) as response:  # nosec B310 - Binance endpoints only
+            with urlopen(url, timeout=self.timeout) as response:  # nosec B310
                 return json.loads(response.read().decode("utf-8"))
         except HTTPError as exc:
             raise RuntimeError(f"HTTP error {exc.code}: {exc.reason}") from exc
@@ -133,21 +148,24 @@ class BinanceArbitrageScanner:
             graph.setdefault(base, {})[quote] = Edge(base, quote, symbol, "SELL")
         return graph
 
-    def _convert(self, amount: float, edge: Edge, prices: Dict[str, Tuple[float, float]]) -> Optional[float]:
+    @staticmethod
+    def _convert_once(amount: float, edge: Edge, prices: Dict[str, Tuple[float, float]]) -> Optional[float]:
         book = prices.get(edge.symbol)
         if not book:
             return None
-
         bid, ask = book
         if edge.side == "BUY":
             if ask <= 0:
                 return None
-            out = amount / ask
-        else:
-            if bid <= 0:
-                return None
-            out = amount * bid
+            return amount / ask
+        if bid <= 0:
+            return None
+        return amount * bid
 
+    def _convert_with_fee(self, amount: float, edge: Edge, prices: Dict[str, Tuple[float, float]]) -> Optional[float]:
+        out = self._convert_once(amount, edge, prices)
+        if out is None:
+            return None
         return out * (1 - self.fee_rate)
 
     def _enumerate_usdt_triangles(self, graph: Dict[str, Dict[str, Edge]], max_assets: int = 120):
@@ -167,6 +185,20 @@ class BinanceArbitrageScanner:
                     continue
                 yield ("USDT", a, b, "USDT"), (e1, e2, e3)
 
+    def _eval_cycle(self, start_usdt: float, edges: Tuple[Edge, Edge, Edge], prices: Dict[str, Tuple[float, float]]):
+        gross = start_usdt
+        net = start_usdt
+        for edge in edges:
+            gross = self._convert_once(gross, edge, prices)
+            net = self._convert_with_fee(net, edge, prices)
+            if gross is None or net is None:
+                return None
+
+        total_fees = max(0.0, gross - net)
+        net_profit = net - start_usdt
+        profit_pct = (net_profit / start_usdt) * 100.0
+        return gross, net, total_fees, net_profit, profit_pct
+
     def evaluate_paths(
         self,
         symbol_rows: List[dict],
@@ -174,59 +206,65 @@ class BinanceArbitrageScanner:
         start_usdt: float,
         max_paths: int,
         max_assets: int,
+        min_clean_profit_usdt: float = 0.0,
     ) -> ScanOutput:
         t0 = time.time()
         graph = self._build_edges(symbol_rows)
 
-        opportunities: List[ArbitrageResult] = []
-        total = 0
+        rows: List[ArbitrageResult] = []
+        scanned = 0
         for path, edges in self._enumerate_usdt_triangles(graph, max_assets=max_assets):
-            total += 1
-            amount = start_usdt
-            ok = True
-            for edge in edges:
-                converted = self._convert(amount, edge, prices)
-                if converted is None:
-                    ok = False
-                    break
-                amount = converted
-
-            if not ok:
+            scanned += 1
+            cycle = self._eval_cycle(start_usdt, edges, prices)
+            if cycle is None:
                 continue
 
-            profit_pct = ((amount / start_usdt) - 1.0) * 100.0
-            opportunities.append(
+            gross, net, fees, net_profit, profit_pct = cycle
+            clean = net_profit > min_clean_profit_usdt
+            rows.append(
                 ArbitrageResult(
                     path=path,
                     symbols=(edges[0].symbol, edges[1].symbol, edges[2].symbol),
                     sides=(edges[0].side, edges[1].side, edges[2].side),
-                    final_usdt=amount,
+                    gross_final_usdt=gross,
+                    final_usdt=net,
+                    total_fees_usdt=fees,
+                    net_profit_usdt=net_profit,
                     profit_pct=profit_pct,
+                    is_clean_profitable=clean,
                 )
             )
 
-        opportunities.sort(key=lambda x: x.profit_pct, reverse=True)
-        top = opportunities[:max_paths]
+        clean_rows = [x for x in rows if x.is_clean_profitable]
+        clean_rows.sort(key=lambda x: x.profit_pct, reverse=True)
+        top = clean_rows[:max_paths]
 
-        profits = [x.profit_pct for x in opportunities]
-        profitable = [p for p in profits if p > 0]
+        all_profits = [x.profit_pct for x in rows]
+        clean_count = len(clean_rows)
         elapsed_ms = int((time.time() - t0) * 1000)
 
         stats = ScanStats(
             market_type=self.market_type,
             testnet=self.testnet,
-            scanned_paths=total,
-            profitable_paths=len(profitable),
-            success_rate_pct=(len(profitable) / total * 100.0) if total else 0.0,
-            best_profit_pct=max(profits) if profits else 0.0,
-            avg_profit_pct=(sum(profits) / len(profits)) if profits else 0.0,
-            median_profit_pct=median(profits) if profits else 0.0,
+            scanned_paths=scanned,
+            valid_paths=len(rows),
+            clean_profitable_paths=clean_count,
+            success_rate_pct=(clean_count / len(rows) * 100.0) if rows else 0.0,
+            best_profit_pct=max(all_profits) if all_profits else 0.0,
+            avg_profit_pct=(sum(all_profits) / len(all_profits)) if all_profits else 0.0,
+            median_profit_pct=median(all_profits) if all_profits else 0.0,
             scan_ms=elapsed_ms,
         )
 
         return ScanOutput(opportunities=top, stats=stats)
 
-    def scan(self, start_usdt: float = 100.0, max_paths: int = 20, max_assets: int = 120) -> ScanOutput:
+    def scan(
+        self,
+        start_usdt: float = 100.0,
+        max_paths: int = 20,
+        max_assets: int = 120,
+        min_clean_profit_usdt: float = 0.0,
+    ) -> ScanOutput:
         symbol_rows = self.fetch_exchange_info()
         prices = self.fetch_book_tickers()
         return self.evaluate_paths(
@@ -235,6 +273,45 @@ class BinanceArbitrageScanner:
             start_usdt=start_usdt,
             max_paths=max_paths,
             max_assets=max_assets,
+            min_clean_profit_usdt=min_clean_profit_usdt,
+        )
+
+    @staticmethod
+    def simulate_compound_plan(
+        initial_capital_usdt: float,
+        per_cycle_net_pct: float,
+        cycles: int,
+        trigger_multiple: float = 2.0,
+        compound_stake_pct: float = 0.10,
+        pre_trigger_stake_pct: float = 1.0,
+    ) -> CompoundPlanResult:
+        capital = initial_capital_usdt
+        trigger_capital = initial_capital_usdt * trigger_multiple
+        trigger_reached = False
+        trigger_cycle = -1
+
+        for cycle_idx in range(1, cycles + 1):
+            if capital >= trigger_capital:
+                if not trigger_reached:
+                    trigger_reached = True
+                    trigger_cycle = cycle_idx
+                stake_pct = compound_stake_pct
+            else:
+                stake_pct = pre_trigger_stake_pct
+
+            stake = capital * stake_pct
+            gain = stake * (per_cycle_net_pct / 100.0)
+            capital += gain
+
+        mode = f"pre:{pre_trigger_stake_pct*100:.1f}% | post:{compound_stake_pct*100:.1f}%"
+        return CompoundPlanResult(
+            initial_capital=initial_capital_usdt,
+            current_capital=capital,
+            cycles_simulated=cycles,
+            trigger_reached=trigger_reached,
+            trigger_cycle=trigger_cycle,
+            stake_mode=mode,
+            per_cycle_net_pct=per_cycle_net_pct,
         )
 
     def validate_api_keys(self, api_key: str, api_secret: str) -> Tuple[bool, str]:
@@ -252,8 +329,8 @@ class BinanceArbitrageScanner:
 
 
 if __name__ == "__main__":
-    scanner = BinanceArbitrageScanner(market_type="spot", testnet=False)
-    out = scanner.scan(start_usdt=100, max_paths=5)
+    scanner = BinanceArbitrageScanner(market_type="spot", testnet=True)
+    out = scanner.scan(start_usdt=10, max_paths=5, min_clean_profit_usdt=0.0001)
     print(out.stats)
     for row in out.opportunities:
         print(row)

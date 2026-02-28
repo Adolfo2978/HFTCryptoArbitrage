@@ -1,59 +1,53 @@
 # HFTCryptoArbitrage
 
-Plataforma de arbitraje triangular en Binance con GUI mejorada, soporte de **Spot/Perpetuals** y selección de **Mainnet/Testnet**.
+Plataforma de arbitraje triangular Binance con GUI avanzada y enfoque en **ganancia limpia neta**.
 
-## Novedades principales
+## Qué hace ahora (según tu regla)
 
-- Ventana principal (`main.py`) con entorno gráfico ampliado:
-  - configuración de API Key/Secret,
-  - selector de mercado (`spot` o `perpetual`),
-  - selector de red (`mainnet` o `testnet`),
-  - escaneo manual y automático,
-  - panel KPI en tiempo real (ms de scan, tasa de éxito, mejor profit, profit promedio),
-  - historial de escaneos,
-  - detalle trader para cada ruta seleccionada.
+- Analiza ciclos `USDT -> A -> B -> USDT`.
+- Calcula por cada ciclo:
+  - final bruto (sin comisiones),
+  - comisiones totales del ciclo,
+  - final neto,
+  - ganancia neta limpia en USDT y en %.
+- Filtra y muestra solo rutas con **ganancia limpia > mínimo** configurable.
 
-- Motor de arbitraje (`binance_arbitrage.py`) mejorado:
-  - soporte API Spot y Futures USDT-M Perpetual,
-  - endpoints productivos y testnet,
-  - evaluación de rutas `USDT -> A -> B -> USDT`,
-  - estadísticas completas por escaneo:
-    - rutas analizadas,
-    - rutas rentables,
-    - tasa de éxito,
-    - mejor/avg/mediana de profit,
-    - tiempo total de ejecución.
+## Soporte de mercado/red
 
-## Importante sobre “éxito completo”
+- Spot + Perpetuals (USDT-M).
+- Mainnet + Testnet.
 
-El sistema entrega **éxito analítico y operativo** (escaneo robusto + métricas + detalle),
-pero no puede garantizar rentabilidad constante en mercado real por:
-- slippage,
-- latencia,
-- cambios del libro,
-- límites de tamaño y comisiones dinámicas.
+## Interés compuesto (regla solicitada)
 
-## Instalación
+Se añadió simulación con tu lógica:
+
+1. Capital inicial (ejemplo: 10 USDT).
+2. Hasta duplicar el capital (10 -> 20), fase pre-trigger.
+3. Cuando llega al doble, se activa compuesto con **10% del capital por ciclo** (configurable).
+4. El crecimiento se aplica con la rentabilidad neta limpia estimada por ciclo.
+
+## GUI (`main.py`)
+
+Incluye:
+- configuración API,
+- selector mercado/red,
+- fee y mínimo de ganancia limpia,
+- KPI en tiempo real,
+- tabla con detalle de fees/gross/net,
+- historial de escaneos,
+- panel de detalle con simulación de interés compuesto.
+
+## Ejecución
 
 ```bash
 python3 -m pip install -r requirements.txt
-```
-
-## Ejecutar GUI
-
-```bash
 python3 main.py
 ```
 
-## Ejecutar scanner por script
+## Nota realista
 
-```bash
-python3 binance_arbitrage.py
-```
-
-## Recomendación de uso
-
-1. Comenzar en **testnet**.
-2. Ajustar fee real de tu cuenta.
-3. Revisar KPI de tasa de éxito y profit medio.
-4. Pasar a mainnet sólo tras validación de latencia/ejecución.
+El sistema garantiza cálculo neto de comisiones dentro del modelo, pero en real pueden afectar:
+- slippage,
+- latencia,
+- profundidad de libro,
+- fills parciales.
