@@ -1,48 +1,51 @@
 # HFTCryptoArbitrage
 
-Sistema de análisis y trading cripto orientado a alta frecuencia, ahora mejorado con un motor de señales basado en IA ligero y eficiente.
+Aplicación para análisis de arbitraje triangular en Binance con **base USDT** y ciclo completo **USDT -> A -> B -> USDT**, incluyendo ventana principal para configuración de API y escaneo en tiempo real.
 
-## Mejoras implementadas
+## ¿Qué se mejoró?
 
-1. **Seguridad operativa**
-   - Se eliminaron credenciales hardcodeadas.
-   - El trading real requiere variables de entorno (`BYBIT_API_KEY`, `BYBIT_API_SECRET`).
-   - El script de ejecución está en **modo dry-run por defecto**.
+- Se añadió una **ventana principal (`main.py`)** con menú/pestañas para:
+  - introducir `API Key` y `API Secret`,
+  - configurar capital base USDT,
+  - configurar fee por trade,
+  - lanzar escaneo manual o automático.
+- Se añadió un motor robusto de arbitraje en `binance_arbitrage.py` que:
+  - descarga mercados spot de Binance,
+  - construye rutas triangulares válidas,
+  - calcula retorno estimado por ruta usando `bid/ask` + fee,
+  - prioriza oportunidades por `% de beneficio`.
+- Se mantuvo enfoque de seguridad: no hay ejecución automática de órdenes en vivo.
 
-2. **Predicción de señales con IA**
-   - Nuevo módulo `ai_signal_system.py` que:
-     - Descarga velas de Bybit (endpoint público).
-     - Construye features técnicas eficientes (`retornos`, `EMA gap`, `z-score de volumen`, `volatilidad`).
-     - Entrena un modelo de **regresión logística online con SGD** (rápido y de baja latencia).
-     - Emite señal: `BUY`, `SELL` o `HOLD` según probabilidad y umbrales.
+## Importante sobre rentabilidad
 
-3. **Eficiencia y mantenimiento**
-   - Pipeline modular (`cliente de mercado`, `features`, `modelo`, `motor de señal`).
-   - Reintentos y timeout para robustez de datos.
-   - Validación out-of-sample simple para seguimiento de accuracy.
+No es posible garantizar que "todo sea rentable" de forma permanente en arbitraje real.
+Este sistema muestra **rentabilidad estimada** antes de:
+- slippage,
+- latencia de red,
+- límites de tamaño mínimo,
+- cambios rápidos del order book.
 
-## Uso rápido
+Aun así, el sistema está diseñado para ayudarte a detectar oportunidades de forma más eficiente.
 
-### 1) Solo predicción IA (sin credenciales)
-
-```bash
-python3 ai_signal_system.py --symbol BTCUSDT --interval 1 --limit 500
-```
-
-### 2) Trading asistido por IA (dry-run)
+## Instalación
 
 ```bash
-python3 Test_bybit.py --symbol BTCUSDT --qty 0.001
+python3 -m pip install -r requirements.txt
 ```
 
-### 3) Trading real (bajo tu responsabilidad)
+## Ejecutar la ventana principal
 
 ```bash
-export BYBIT_API_KEY="tu_api_key"
-export BYBIT_API_SECRET="tu_api_secret"
-python3 Test_bybit.py --symbol BTCUSDT --qty 0.001 --execute
+python3 main.py
 ```
 
-## Advertencia
+## Ejecutar scanner por script (sin GUI)
 
-Este repositorio es experimental. No es asesoría financiera. Usa gestión de riesgo, límites de exposición, y pruebas en testnet antes de operar en real.
+```bash
+python3 binance_arbitrage.py
+```
+
+## Dependencias
+
+- `requests` para Binance API pública.
+- `numpy/pandas/pybit` se mantienen para módulos previos del repo.
