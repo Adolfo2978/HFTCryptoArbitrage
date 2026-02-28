@@ -1,8 +1,8 @@
 # HFTCryptoArbitrage
 
-Sistema unificado en una sola ventana principal (`main.py`) con enfoque operativo en Binance.
+## Sistema completo en **un solo archivo**
 
-## 4 pestañas integradas en un único GUI principal
+Ahora todo el sistema está incluido en **`main.py`** y cumple todas las funciones en un único GUI principal:
 
 1. **Configuración**
    - API keys, mercado, red, fee, filtros de ganancia limpia.
@@ -13,29 +13,20 @@ Sistema unificado en una sola ventana principal (`main.py`) con enfoque operativ
 4. **Ejecución unificada Binance (AI + Scanner)**
    - IA de señal sobre Binance.
    - Cruce automático con scanner limpio para decidir si existe ruta favorable.
-   - Registro visible de **traders ejecutados** en tabla (timestamp, símbolo, señal, ruta, net profit, modo, estado).
+   - Tabla visible de **traders ejecutados**.
 
-## Mejoras de robustez y estilo profesional
+## Incluido dentro de `main.py`
 
-- Diseño de GUI con estilo consistente (`ttk`, cards KPI, tipografía homogénea).
-- Validaciones de entrada numérica para evitar errores silenciosos.
-- Registro en vivo de ejecución y trazabilidad operativa por ciclo.
-- Persistencia de configuración para reinicio rápido.
+- Scanner triangular Binance (Spot/Perpetual, Mainnet/Testnet).
+- Cálculo neto limpio con fees por ciclo.
+- Simulación de interés compuesto con trigger.
+- Motor IA ligero para señal Binance/Bybit.
+- GUI profesional y robusta con validaciones.
 
-## Producción (recomendación)
-
-- Ejecutar en **testnet** primero.
-- Ajustar fees reales de cuenta.
-- Confirmar latencia y calidad de datos.
-- Activar modo operativo solo tras validación.
-
-## Ejecutar
+## Ejecución
 
 ```bash
-python3 -m pip install -r requirements.txt
 python3 main.py
 ```
 
-## Auditoría del proyecto
-
-`BINANCE_FILE_AUDIT.md` resume estado archivo por archivo y componentes legacy.
+> Si quieres usar módulos legacy (`ai_signal_system.py`, `binance_arbitrage.py`, `Test_bybit.py`) se mantienen por compatibilidad, pero el flujo principal de producción queda unificado en `main.py`.
