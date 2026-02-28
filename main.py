@@ -42,12 +42,12 @@ class ArbitrageApp:
         self.compound_trigger_multiple_var = tk.StringVar(value="2.0")
         self.compound_stake_pct_var = tk.StringVar(value="0.10")
 
-        self.bybit_symbol_var = tk.StringVar(value="BTCUSDT")
-        self.bybit_qty_var = tk.StringVar(value="0.001")
-        self.bybit_interval_var = tk.StringVar(value="1")
-        self.bybit_limit_var = tk.StringVar(value="300")
-        self.bybit_testnet_var = tk.BooleanVar(value=True)
-        self.bybit_execute_var = tk.BooleanVar(value=False)
+        self.binance_symbol_var = tk.StringVar(value="BTCUSDT")
+        self.binance_qty_var = tk.StringVar(value="10")
+        self.binance_interval_var = tk.StringVar(value="1m")
+        self.binance_limit_var = tk.StringVar(value="300")
+        self.binance_testnet_var = tk.BooleanVar(value=True)
+        self.binance_execute_var = tk.BooleanVar(value=False)
 
         self.status_var = tk.StringVar(value="Listo")
         self.kpi_scan_ms = tk.StringVar(value="0 ms")
@@ -69,7 +69,7 @@ class ArbitrageApp:
         notebook.add(config_frame, text="Configuración")
         notebook.add(scan_frame, text="Scanner")
         notebook.add(details_frame, text="Estadística / interés compuesto")
-        notebook.add(execution_frame, text="Ejecución unificada (AI + Bybit)")
+        notebook.add(execution_frame, text="Ejecución unificada Binance (AI + Scanner)")
 
         self._build_config_tab(config_frame)
         self._build_scan_tab(scan_frame)
@@ -179,35 +179,35 @@ class ArbitrageApp:
         frame.columnconfigure(1, weight=1)
         frame.rowconfigure(9, weight=1)
 
-        ttk.Label(frame, text="Bybit Symbol").grid(row=0, column=0, sticky="w", pady=4)
-        ttk.Entry(frame, textvariable=self.bybit_symbol_var).grid(row=0, column=1, sticky="ew", pady=4)
+        ttk.Label(frame, text="Binance Symbol").grid(row=0, column=0, sticky="w", pady=4)
+        ttk.Entry(frame, textvariable=self.binance_symbol_var).grid(row=0, column=1, sticky="ew", pady=4)
 
         ttk.Label(frame, text="Qty").grid(row=1, column=0, sticky="w", pady=4)
-        ttk.Entry(frame, textvariable=self.bybit_qty_var).grid(row=1, column=1, sticky="ew", pady=4)
+        ttk.Entry(frame, textvariable=self.binance_qty_var).grid(row=1, column=1, sticky="ew", pady=4)
 
         ttk.Label(frame, text="Interval").grid(row=2, column=0, sticky="w", pady=4)
-        ttk.Entry(frame, textvariable=self.bybit_interval_var).grid(row=2, column=1, sticky="ew", pady=4)
+        ttk.Entry(frame, textvariable=self.binance_interval_var).grid(row=2, column=1, sticky="ew", pady=4)
 
         ttk.Label(frame, text="Limit candles").grid(row=3, column=0, sticky="w", pady=4)
-        ttk.Entry(frame, textvariable=self.bybit_limit_var).grid(row=3, column=1, sticky="ew", pady=4)
+        ttk.Entry(frame, textvariable=self.binance_limit_var).grid(row=3, column=1, sticky="ew", pady=4)
 
-        ttk.Checkbutton(frame, text="Bybit Testnet", variable=self.bybit_testnet_var).grid(
+        ttk.Checkbutton(frame, text="Binance Testnet", variable=self.binance_testnet_var).grid(
             row=4, column=0, sticky="w", pady=4
         )
-        ttk.Checkbutton(frame, text="Ejecutar orden real (si señal != HOLD)", variable=self.bybit_execute_var).grid(
+        ttk.Checkbutton(frame, text="Ejecutar orden real (si señal != HOLD)", variable=self.binance_execute_var).grid(
             row=4, column=1, sticky="w", pady=4
         )
 
         buttons = ttk.Frame(frame)
         buttons.grid(row=5, column=0, columnspan=2, sticky="w", pady=8)
-        ttk.Button(buttons, text="Analizar IA Bybit", command=self._run_bybit_ai).pack(side="left", padx=4)
-        ttk.Button(buttons, text="Ejecutar flujo unificado", command=self._run_unified_flow).pack(side="left", padx=4)
+        ttk.Button(buttons, text="Analizar IA Binance", command=self._run_binance_ai).pack(side="left", padx=4)
+        ttk.Button(buttons, text="Ejecutar flujo unificado Binance", command=self._run_unified_flow).pack(side="left", padx=4)
 
         ttk.Label(
             frame,
             text=(
                 "Este panel unifica IA + ejecución: primero calcula señal con ai_signal_system, "
-                "luego (opcional) envía orden en Bybit con reglas de seguridad."
+                "cruza con scanner de arbitraje Binance y genera decisión operativa."
             ),
             foreground="#8b0000",
             wraplength=1100,
@@ -235,12 +235,12 @@ class ArbitrageApp:
             "compound_cycles": self.compound_cycles_var.get().strip(),
             "compound_trigger_multiple": self.compound_trigger_multiple_var.get().strip(),
             "compound_stake_pct": self.compound_stake_pct_var.get().strip(),
-            "bybit_symbol": self.bybit_symbol_var.get().strip(),
-            "bybit_qty": self.bybit_qty_var.get().strip(),
-            "bybit_interval": self.bybit_interval_var.get().strip(),
-            "bybit_limit": self.bybit_limit_var.get().strip(),
-            "bybit_testnet": self.bybit_testnet_var.get(),
-            "bybit_execute": self.bybit_execute_var.get(),
+            "binance_symbol": self.binance_symbol_var.get().strip(),
+            "binance_qty": self.binance_qty_var.get().strip(),
+            "binance_interval": self.binance_interval_var.get().strip(),
+            "binance_limit": self.binance_limit_var.get().strip(),
+            "binance_testnet": self.binance_testnet_var.get(),
+            "binance_execute": self.binance_execute_var.get(),
         }
         CONFIG_PATH.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         self.status_var.set("Configuración guardada")
@@ -261,12 +261,12 @@ class ArbitrageApp:
             self.compound_cycles_var.set(payload.get("compound_cycles", "50"))
             self.compound_trigger_multiple_var.set(payload.get("compound_trigger_multiple", "2.0"))
             self.compound_stake_pct_var.set(payload.get("compound_stake_pct", "0.10"))
-            self.bybit_symbol_var.set(payload.get("bybit_symbol", "BTCUSDT"))
-            self.bybit_qty_var.set(payload.get("bybit_qty", "0.001"))
-            self.bybit_interval_var.set(payload.get("bybit_interval", "1"))
-            self.bybit_limit_var.set(payload.get("bybit_limit", "300"))
-            self.bybit_testnet_var.set(bool(payload.get("bybit_testnet", True)))
-            self.bybit_execute_var.set(bool(payload.get("bybit_execute", False)))
+            self.binance_symbol_var.set(payload.get("binance_symbol", "BTCUSDT"))
+            self.binance_qty_var.set(payload.get("binance_qty", "10"))
+            self.binance_interval_var.set(payload.get("binance_interval", "1m"))
+            self.binance_limit_var.set(payload.get("binance_limit", "300"))
+            self.binance_testnet_var.set(bool(payload.get("binance_testnet", True)))
+            self.binance_execute_var.set(bool(payload.get("binance_execute", False)))
             self.status_var.set("Configuración cargada")
         except Exception as exc:  # noqa: BLE001
             self.status_var.set(f"No se pudo cargar configuración: {exc}")
@@ -275,22 +275,22 @@ class ArbitrageApp:
         self.execution_text.insert("end", f"{text}\n")
         self.execution_text.see("end")
 
-    def _run_bybit_ai(self):
-        threading.Thread(target=self._run_bybit_ai_worker, daemon=True).start()
+    def _run_binance_ai(self):
+        threading.Thread(target=self._run_binance_ai_worker, daemon=True).start()
 
-    def _run_bybit_ai_worker(self):
+    def _run_binance_ai_worker(self):
         try:
             from ai_signal_system import run as run_ai_signal
 
-            symbol = self.bybit_symbol_var.get().strip().upper()
-            interval = self.bybit_interval_var.get().strip()
-            limit = int(self.bybit_limit_var.get().strip())
-            summary = run_ai_signal(symbol=symbol, interval=interval, limit=limit)
+            symbol = self.binance_symbol_var.get().strip().upper()
+            interval = self.binance_interval_var.get().strip()
+            limit = int(self.binance_limit_var.get().strip())
+            summary = run_ai_signal(symbol=symbol, interval=interval, limit=limit, exchange="binance")
             self.root.after(0, lambda: self._log_exec(f"AI summary: {summary}"))
-            self.root.after(0, lambda: self.status_var.set(f"AI Bybit OK: {summary['signal']}"))
+            self.root.after(0, lambda: self.status_var.set(f"AI Binance OK: {summary['signal']}"))
         except Exception as exc:  # noqa: BLE001
-            self.root.after(0, lambda: self._log_exec(f"Error AI Bybit: {exc}"))
-            self.root.after(0, lambda: self.status_var.set(f"Error AI Bybit: {exc}"))
+            self.root.after(0, lambda: self._log_exec(f"Error AI Binance: {exc}"))
+            self.root.after(0, lambda: self.status_var.set(f"Error AI Binance: {exc}"))
 
     def _run_unified_flow(self):
         threading.Thread(target=self._run_unified_flow_worker, daemon=True).start()
@@ -298,38 +298,45 @@ class ArbitrageApp:
     def _run_unified_flow_worker(self):
         try:
             from ai_signal_system import run as run_ai_signal
-            from Test_bybit import create_session, current_milli_time, get_available_usdt, place_market_order
 
-            symbol = self.bybit_symbol_var.get().strip().upper()
-            interval = self.bybit_interval_var.get().strip()
-            limit = int(self.bybit_limit_var.get().strip())
-            qty = self.bybit_qty_var.get().strip()
-            execute = self.bybit_execute_var.get()
-            testnet = self.bybit_testnet_var.get()
+            symbol = self.binance_symbol_var.get().strip().upper()
+            interval = self.binance_interval_var.get().strip()
+            limit = int(self.binance_limit_var.get().strip())
+            qty = float(self.binance_qty_var.get().strip())
+            execute = self.binance_execute_var.get()
+            testnet = self.binance_testnet_var.get()
 
-            summary = run_ai_signal(symbol=symbol, interval=interval, limit=limit)
-            self.root.after(0, lambda: self._log_exec(f"1) Señal IA: {summary}"))
+            summary = run_ai_signal(symbol=symbol, interval=interval, limit=limit, exchange="binance")
+            self.root.after(0, lambda: self._log_exec(f"1) Señal IA Binance: {summary}"))
+
+            self.scanner.configure(
+                market_type=self.market_var.get().strip(),
+                testnet=testnet,
+                fee_rate=float(self.fee_var.get()),
+            )
+            scan = self.scanner.scan(
+                start_usdt=qty,
+                max_paths=5,
+                max_assets=int(self.max_assets_var.get()),
+                min_clean_profit_usdt=float(self.min_clean_profit_var.get()),
+            )
+
+            self.root.after(0, lambda: self._log_exec(f"2) Rutas limpias encontradas: {len(scan.opportunities)}"))
+            if scan.opportunities:
+                best = scan.opportunities[0]
+                self.root.after(0, lambda: self._log_exec(
+                    f"3) Mejor ruta: {' -> '.join(best.path)} | net={best.net_profit_usdt:.6f} USDT | fee={best.total_fees_usdt:.6f}"
+                ))
+            else:
+                self.root.after(0, lambda: self._log_exec("3) No hay rutas con ganancia limpia en este ciclo."))
 
             if not execute:
-                self.root.after(0, lambda: self._log_exec("2) Dry-run activo: no se envía orden."))
-                return
+                self.root.after(0, lambda: self._log_exec("4) Modo simulación: no se envía orden real (recomendado)."))
+            else:
+                self.root.after(0, lambda: self._log_exec(
+                    "4) Ejecución real Binance no habilitada en este módulo; usar sólo como señal + verificación."))
 
-            if summary["signal"] == "HOLD":
-                self.root.after(0, lambda: self._log_exec("2) Señal HOLD: orden cancelada por seguridad."))
-                return
-
-            side = "Buy" if summary["signal"] == "BUY" else "Sell"
-            session = create_session(testnet=testnet)
-            before = get_available_usdt(session)
-            t0 = current_milli_time()
-            order = place_market_order(session, symbol, side, qty)
-            t1 = current_milli_time()
-            after = get_available_usdt(session)
-
-            self.root.after(0, lambda: self._log_exec(f"3) Orden enviada: side={side}, qty={qty}, symbol={symbol}"))
-            self.root.after(0, lambda: self._log_exec(f"4) Respuesta orden: {order}"))
-            self.root.after(0, lambda: self._log_exec(f"5) Latencia: {t1 - t0}ms | USDT antes={before} | después={after}"))
-            self.root.after(0, lambda: self.status_var.set(f"Flujo unificado OK ({summary['signal']})"))
+            self.root.after(0, lambda: self.status_var.set(f"Flujo Binance unificado OK ({summary['signal']})"))
         except Exception as exc:  # noqa: BLE001
             self.root.after(0, lambda: self._log_exec(f"Error flujo unificado: {exc}"))
             self.root.after(0, lambda: self.status_var.set(f"Error flujo unificado: {exc}"))

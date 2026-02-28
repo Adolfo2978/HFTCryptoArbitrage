@@ -64,7 +64,7 @@ def main() -> None:
 
     from ai_signal_system import run as run_ai_signal
 
-    ai_summary = run_ai_signal(symbol=args.symbol, interval=args.interval, limit=args.limit)
+    ai_summary = run_ai_signal(symbol=args.symbol, interval=args.interval, limit=args.limit, exchange="bybit")
     print("AI summary:", ai_summary)
 
     if not args.execute:
