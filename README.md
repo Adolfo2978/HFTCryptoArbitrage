@@ -1,11 +1,48 @@
-# Data Analysis with Python (My Personal Project)
-# -> HFTCryptoArbitrage
-# Cryptocurrency High-frequency Trading ON:
-# Binance, BitMex, Bybit, Gate, ....
+# HFTCryptoArbitrage
 
-![SharpTrader-difference-analyses](https://github.com/user-attachments/assets/0bfcf5c2-a05b-42ba-bf18-4b13eb338d9b)
-<img width="1440" alt="Screenshot 2024-11-06 at 08 05 33" src="https://github.com/user-attachments/assets/bf483589-899c-43ae-bb2c-5c11610a804c">
-<img width="1432" alt="Screenshot 2024-11-05 at 16 37 57" src="https://github.com/user-attachments/assets/da7efd6c-ea06-4d5f-b9e7-1f1cdae0b25a">
-<img width="1227" alt="Screenshot 2024-11-05 at 15 19 49" src="https://github.com/user-attachments/assets/ff741884-3a54-4744-882d-ad59366a4bbe">
-<img width="1283" alt="Screenshot 2024-11-05 at 09 09 51" src="https://github.com/user-attachments/assets/5691445c-ffb0-4232-b6fc-fdb5f6203e41">
-<img width="1340" alt="Screenshot 2024-11-10 at 19 12 35" src="https://github.com/user-attachments/assets/25f993fc-bd1e-4503-b426-26b5ce3a0fca">
+Sistema de análisis y trading cripto orientado a alta frecuencia, ahora mejorado con un motor de señales basado en IA ligero y eficiente.
+
+## Mejoras implementadas
+
+1. **Seguridad operativa**
+   - Se eliminaron credenciales hardcodeadas.
+   - El trading real requiere variables de entorno (`BYBIT_API_KEY`, `BYBIT_API_SECRET`).
+   - El script de ejecución está en **modo dry-run por defecto**.
+
+2. **Predicción de señales con IA**
+   - Nuevo módulo `ai_signal_system.py` que:
+     - Descarga velas de Bybit (endpoint público).
+     - Construye features técnicas eficientes (`retornos`, `EMA gap`, `z-score de volumen`, `volatilidad`).
+     - Entrena un modelo de **regresión logística online con SGD** (rápido y de baja latencia).
+     - Emite señal: `BUY`, `SELL` o `HOLD` según probabilidad y umbrales.
+
+3. **Eficiencia y mantenimiento**
+   - Pipeline modular (`cliente de mercado`, `features`, `modelo`, `motor de señal`).
+   - Reintentos y timeout para robustez de datos.
+   - Validación out-of-sample simple para seguimiento de accuracy.
+
+## Uso rápido
+
+### 1) Solo predicción IA (sin credenciales)
+
+```bash
+python3 ai_signal_system.py --symbol BTCUSDT --interval 1 --limit 500
+```
+
+### 2) Trading asistido por IA (dry-run)
+
+```bash
+python3 Test_bybit.py --symbol BTCUSDT --qty 0.001
+```
+
+### 3) Trading real (bajo tu responsabilidad)
+
+```bash
+export BYBIT_API_KEY="tu_api_key"
+export BYBIT_API_SECRET="tu_api_secret"
+python3 Test_bybit.py --symbol BTCUSDT --qty 0.001 --execute
+```
+
+## Advertencia
+
+Este repositorio es experimental. No es asesoría financiera. Usa gestión de riesgo, límites de exposición, y pruebas en testnet antes de operar en real.
