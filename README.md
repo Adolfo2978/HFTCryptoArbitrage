@@ -1,17 +1,8 @@
 # HFTCryptoArbitrage
 
-Sistema unificado en una sola ventana principal (`main.py`) con enfoque **100% operativo en Binance**.
+Sistema unificado en una sola ventana principal (`main.py`) con enfoque operativo en Binance.
 
-## Qué incluye el sistema unificado
-
-- Scanner de arbitraje triangular Binance (`USDT -> A -> B -> USDT`).
-- Cálculo de ganancia limpia neta (incluye comisiones por ciclo).
-- Simulación de interés compuesto con trigger al duplicar capital.
-- Señales IA en Binance y flujo unificado en la misma ventana.
-
-## Ventana principal (`main.py`)
-
-Tienes 4 pestañas integradas:
+## 4 pestañas integradas en un único GUI principal
 
 1. **Configuración**
    - API keys, mercado, red, fee, filtros de ganancia limpia.
@@ -22,26 +13,21 @@ Tienes 4 pestañas integradas:
 4. **Ejecución unificada Binance (AI + Scanner)**
    - IA de señal sobre Binance.
    - Cruce automático con scanner limpio para decidir si existe ruta favorable.
+   - Registro visible de **traders ejecutados** en tabla (timestamp, símbolo, señal, ruta, net profit, modo, estado).
 
-## Regla de rentabilidad limpia
+## Mejoras de robustez y estilo profesional
 
-Cada ciclo calcula:
-- final bruto,
-- comisiones totales,
-- final neto,
-- ganancia neta limpia.
+- Diseño de GUI con estilo consistente (`ttk`, cards KPI, tipografía homogénea).
+- Validaciones de entrada numérica para evitar errores silenciosos.
+- Registro en vivo de ejecución y trazabilidad operativa por ciclo.
+- Persistencia de configuración para reinicio rápido.
 
-Solo se muestran rutas con ganancia neta limpia superior al mínimo configurado.
+## Producción (recomendación)
 
-## Regla de interés compuesto solicitada
-
-- Capital inicial (ej. 10 USDT).
-- Hasta duplicar capital (10 -> 20), fase pre-trigger.
-- Al duplicar, se activa compuesto usando 10% del capital por ciclo (configurable).
-
-## Auditoría de archivos
-
-Se añadió `BINANCE_FILE_AUDIT.md` con la verificación archivo por archivo y el estado de migración al flujo Binance.
+- Ejecutar en **testnet** primero.
+- Ajustar fees reales de cuenta.
+- Confirmar latencia y calidad de datos.
+- Activar modo operativo solo tras validación.
 
 ## Ejecutar
 
@@ -50,6 +36,6 @@ python3 -m pip install -r requirements.txt
 python3 main.py
 ```
 
-## Nota
+## Auditoría del proyecto
 
-El modelo es neto de comisiones, pero en real pueden afectar slippage, latencia y liquidez del libro.
+`BINANCE_FILE_AUDIT.md` resume estado archivo por archivo y componentes legacy.

@@ -1,4 +1,4 @@
-"""GUI principal: Binance Spot/Perpetual (Mainnet/Testnet) + ganancia limpia y plan compuesto."""
+"""GUI principal profesional: Configuración, Scanner, Estadística y Ejecución Binance unificada."""
 
 from __future__ import annotations
 
@@ -17,16 +17,15 @@ CONFIG_PATH = Path(".binance_gui_config.json")
 class ArbitrageApp:
     def __init__(self, root: tk.Tk):
         self.root = root
-        self.root.title("HFTCryptoArbitrage - Control Center")
-        self.root.geometry("1360x820")
+        self.root.title("HFTCryptoArbitrage - Binance Control Center")
+        self.root.geometry("1420x860")
 
-        style = ttk.Style()
-        if "clam" in style.theme_names():
-            style.theme_use("clam")
+        self._setup_style()
 
         self.scanner = BinanceArbitrageScanner()
         self.running = False
-        self.scan_history = []
+        self.scan_history: list[tuple] = []
+        self.executed_trades: list[tuple] = []
         self.last_output: ScanOutput | None = None
 
         self.api_key_var = tk.StringVar()
@@ -58,14 +57,27 @@ class ArbitrageApp:
         self._build_ui()
         self._load_config()
 
+    def _setup_style(self):
+        style = ttk.Style()
+        if "clam" in style.theme_names():
+            style.theme_use("clam")
+
+        style.configure("TNotebook", tabposition="n")
+        style.configure("TNotebook.Tab", padding=(14, 8), font=("Segoe UI", 10, "bold"))
+        style.configure("Card.TFrame", relief="solid", borderwidth=1)
+        style.configure("CardTitle.TLabel", font=("Segoe UI", 9))
+        style.configure("CardValue.TLabel", font=("Segoe UI", 13, "bold"))
+        style.configure("Status.TLabel", foreground="#0b4f8a", font=("Segoe UI", 10, "bold"))
+
     def _build_ui(self):
         notebook = ttk.Notebook(self.root)
-        notebook.pack(fill="both", expand=True, padx=8, pady=8)
+        notebook.pack(fill="both", expand=True, padx=10, pady=10)
 
-        config_frame = ttk.Frame(notebook, padding=10)
-        scan_frame = ttk.Frame(notebook, padding=10)
-        details_frame = ttk.Frame(notebook, padding=10)
-        execution_frame = ttk.Frame(notebook, padding=10)
+        config_frame = ttk.Frame(notebook, padding=12)
+        scan_frame = ttk.Frame(notebook, padding=12)
+        details_frame = ttk.Frame(notebook, padding=12)
+        execution_frame = ttk.Frame(notebook, padding=12)
+
         notebook.add(config_frame, text="Configuración")
         notebook.add(scan_frame, text="Scanner")
         notebook.add(details_frame, text="Estadística / interés compuesto")
@@ -78,7 +90,6 @@ class ArbitrageApp:
 
     def _build_config_tab(self, frame: ttk.Frame):
         frame.columnconfigure(1, weight=1)
-
         rows = [
             ("Binance API Key", self.api_key_var),
             ("Binance API Secret", self.api_secret_var),
@@ -106,20 +117,20 @@ class ArbitrageApp:
             row=10, column=1, sticky="ew", pady=5
         )
 
-        actions = ttk.Frame(frame)
-        actions.grid(row=11, column=0, columnspan=2, sticky="w", pady=10)
-        ttk.Button(actions, text="Guardar configuración", command=self._save_config).pack(side="left", padx=4)
-        ttk.Button(actions, text="Validar conectividad API", command=self._validate_keys).pack(side="left", padx=4)
+        buttons = ttk.Frame(frame)
+        buttons.grid(row=11, column=0, columnspan=2, sticky="w", pady=10)
+        ttk.Button(buttons, text="Guardar configuración", command=self._save_config).pack(side="left", padx=4)
+        ttk.Button(buttons, text="Validar conectividad API", command=self._validate_keys).pack(side="left", padx=4)
 
-        ttk.Label(frame, textvariable=self.status_var, foreground="#0047ab").grid(row=12, column=0, columnspan=2, sticky="w")
+        ttk.Label(frame, textvariable=self.status_var, style="Status.TLabel").grid(row=12, column=0, columnspan=2, sticky="w")
 
         ttk.Label(
             frame,
             text=(
-                "Se muestran SOLO rutas con ganancia limpia (neta de comisiones) > mínimo definido. "
-                "Interés compuesto: se activa al duplicar capital y usa 10% (configurable) por ciclo."
+                "Operación robusta: solo rutas con ganancia neta limpia y control de riesgo. "
+                "Recomendado: testnet + validación de latencia antes de cualquier operación real."
             ),
-            wraplength=1100,
+            wraplength=1150,
             foreground="#8b0000",
         ).grid(row=13, column=0, columnspan=2, sticky="w", pady=10)
 
@@ -140,16 +151,7 @@ class ArbitrageApp:
 
         cols = ("rank", "path", "symbols", "net_profit", "fees", "gross_final", "net_final", "profit_pct")
         self.tree = ttk.Treeview(frame, columns=cols, show="headings", height=19)
-        widths = {
-            "rank": 55,
-            "path": 210,
-            "symbols": 230,
-            "net_profit": 110,
-            "fees": 100,
-            "gross_final": 110,
-            "net_final": 110,
-            "profit_pct": 100,
-        }
+        widths = {"rank": 55, "path": 220, "symbols": 250, "net_profit": 110, "fees": 100, "gross_final": 110, "net_final": 110, "profit_pct": 100}
         for col in cols:
             self.tree.heading(col, text=col)
             self.tree.column(col, width=widths[col], anchor="center")
@@ -160,43 +162,35 @@ class ArbitrageApp:
         frame.columnconfigure(0, weight=1)
         frame.rowconfigure(1, weight=1)
 
-        ttk.Label(frame, text="Historial de escaneos", font=("Arial", 11, "bold")).grid(row=0, column=0, sticky="w")
+        ttk.Label(frame, text="Historial de escaneos", font=("Segoe UI", 11, "bold")).grid(row=0, column=0, sticky="w")
         hist_cols = ("timestamp", "market", "network", "valid", "clean", "success", "best", "ms")
         self.hist_tree = ttk.Treeview(frame, columns=hist_cols, show="headings", height=8)
-        widths = {"timestamp": 155, "market": 90, "network": 90, "valid": 80, "clean": 80, "success": 95, "best": 95, "ms": 80}
+        widths = {"timestamp": 165, "market": 90, "network": 90, "valid": 80, "clean": 80, "success": 95, "best": 95, "ms": 80}
         for col in hist_cols:
             self.hist_tree.heading(col, text=col)
             self.hist_tree.column(col, width=widths[col], anchor="center")
         self.hist_tree.grid(row=1, column=0, sticky="nsew")
 
-        ttk.Label(frame, text="Detalle trader + simulación interés compuesto", font=("Arial", 11, "bold")).grid(
-            row=2, column=0, sticky="w", pady=(10, 4)
-        )
-        self.detail_text = tk.Text(frame, height=12, wrap="word")
+        ttk.Label(frame, text="Detalle trader + simulación interés compuesto", font=("Segoe UI", 11, "bold")).grid(row=2, column=0, sticky="w", pady=(10, 4))
+        self.detail_text = tk.Text(frame, height=12, wrap="word", font=("Consolas", 10))
         self.detail_text.grid(row=3, column=0, sticky="nsew")
 
     def _build_execution_tab(self, frame: ttk.Frame):
         frame.columnconfigure(1, weight=1)
-        frame.rowconfigure(9, weight=1)
+        frame.rowconfigure(8, weight=1)
+        frame.rowconfigure(11, weight=1)
 
         ttk.Label(frame, text="Binance Symbol").grid(row=0, column=0, sticky="w", pady=4)
         ttk.Entry(frame, textvariable=self.binance_symbol_var).grid(row=0, column=1, sticky="ew", pady=4)
-
-        ttk.Label(frame, text="Qty").grid(row=1, column=0, sticky="w", pady=4)
+        ttk.Label(frame, text="Qty (USDT base)").grid(row=1, column=0, sticky="w", pady=4)
         ttk.Entry(frame, textvariable=self.binance_qty_var).grid(row=1, column=1, sticky="ew", pady=4)
-
         ttk.Label(frame, text="Interval").grid(row=2, column=0, sticky="w", pady=4)
         ttk.Entry(frame, textvariable=self.binance_interval_var).grid(row=2, column=1, sticky="ew", pady=4)
-
         ttk.Label(frame, text="Limit candles").grid(row=3, column=0, sticky="w", pady=4)
         ttk.Entry(frame, textvariable=self.binance_limit_var).grid(row=3, column=1, sticky="ew", pady=4)
 
-        ttk.Checkbutton(frame, text="Binance Testnet", variable=self.binance_testnet_var).grid(
-            row=4, column=0, sticky="w", pady=4
-        )
-        ttk.Checkbutton(frame, text="Ejecutar orden real (si señal != HOLD)", variable=self.binance_execute_var).grid(
-            row=4, column=1, sticky="w", pady=4
-        )
+        ttk.Checkbutton(frame, text="Binance Testnet", variable=self.binance_testnet_var).grid(row=4, column=0, sticky="w", pady=4)
+        ttk.Checkbutton(frame, text="Marcar ejecución operativa", variable=self.binance_execute_var).grid(row=4, column=1, sticky="w", pady=4)
 
         buttons = ttk.Frame(frame)
         buttons.grid(row=5, column=0, columnspan=2, sticky="w", pady=8)
@@ -205,21 +199,27 @@ class ArbitrageApp:
 
         ttk.Label(
             frame,
-            text=(
-                "Este panel unifica IA + ejecución: primero calcula señal con ai_signal_system, "
-                "cruza con scanner de arbitraje Binance y genera decisión operativa."
-            ),
+            text="Este panel cruza señal IA + scanner de arbitraje limpio y registra traders/ejecuciones en tabla.",
             foreground="#8b0000",
-            wraplength=1100,
+            wraplength=1200,
         ).grid(row=6, column=0, columnspan=2, sticky="w", pady=4)
 
-        self.execution_text = tk.Text(frame, height=16, wrap="word")
-        self.execution_text.grid(row=9, column=0, columnspan=2, sticky="nsew", pady=6)
+        self.execution_text = tk.Text(frame, height=10, wrap="word", font=("Consolas", 10))
+        self.execution_text.grid(row=8, column=0, columnspan=2, sticky="nsew", pady=6)
+
+        ttk.Label(frame, text="Traders ejecutados (registro visible)", font=("Segoe UI", 10, "bold")).grid(row=9, column=0, columnspan=2, sticky="w")
+        trade_cols = ("timestamp", "symbol", "signal", "best_path", "net_profit", "mode", "status")
+        self.trade_tree = ttk.Treeview(frame, columns=trade_cols, show="headings", height=7)
+        tw = {"timestamp": 165, "symbol": 90, "signal": 70, "best_path": 320, "net_profit": 100, "mode": 95, "status": 300}
+        for col in trade_cols:
+            self.trade_tree.heading(col, text=col)
+            self.trade_tree.column(col, width=tw[col], anchor="center")
+        self.trade_tree.grid(row=11, column=0, columnspan=2, sticky="nsew", pady=4)
 
     def _kpi_card(self, parent, title: str, value_var: tk.StringVar):
-        card = ttk.Frame(parent, padding=8)
-        ttk.Label(card, text=title).pack(anchor="w")
-        ttk.Label(card, textvariable=value_var, font=("Arial", 13, "bold")).pack(anchor="w")
+        card = ttk.Frame(parent, style="Card.TFrame", padding=8)
+        ttk.Label(card, text=title, style="CardTitle.TLabel").pack(anchor="w")
+        ttk.Label(card, textvariable=value_var, style="CardValue.TLabel").pack(anchor="w")
         return card
 
     def _save_config(self):
@@ -271,9 +271,38 @@ class ArbitrageApp:
         except Exception as exc:  # noqa: BLE001
             self.status_var.set(f"No se pudo cargar configuración: {exc}")
 
+    def _validate_positive_float(self, raw: str, field: str) -> float:
+        try:
+            value = float(raw)
+        except ValueError as exc:
+            raise ValueError(f"{field} debe ser número") from exc
+        if value <= 0:
+            raise ValueError(f"{field} debe ser > 0")
+        return value
+
+    def _validate_positive_int(self, raw: str, field: str) -> int:
+        try:
+            value = int(raw)
+        except ValueError as exc:
+            raise ValueError(f"{field} debe ser entero") from exc
+        if value <= 0:
+            raise ValueError(f"{field} debe ser > 0")
+        return value
+
     def _log_exec(self, text: str):
         self.execution_text.insert("end", f"{text}\n")
         self.execution_text.see("end")
+
+    def _record_trade(self, symbol: str, signal: str, best_path: str, net_profit: float, mode: str, status: str):
+        ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+        row = (ts, symbol, signal, best_path, f"{net_profit:.6f}", mode, status)
+        self.executed_trades.append(row)
+        self.executed_trades = self.executed_trades[-200:]
+
+        for item in self.trade_tree.get_children():
+            self.trade_tree.delete(item)
+        for item in self.executed_trades[-100:]:
+            self.trade_tree.insert("", "end", values=item)
 
     def _run_binance_ai(self):
         threading.Thread(target=self._run_binance_ai_worker, daemon=True).start()
@@ -284,7 +313,7 @@ class ArbitrageApp:
 
             symbol = self.binance_symbol_var.get().strip().upper()
             interval = self.binance_interval_var.get().strip()
-            limit = int(self.binance_limit_var.get().strip())
+            limit = self._validate_positive_int(self.binance_limit_var.get().strip(), "Limit candles")
             summary = run_ai_signal(symbol=symbol, interval=interval, limit=limit, exchange="binance")
             self.root.after(0, lambda: self._log_exec(f"AI summary: {summary}"))
             self.root.after(0, lambda: self.status_var.set(f"AI Binance OK: {summary['signal']}"))
@@ -301,40 +330,40 @@ class ArbitrageApp:
 
             symbol = self.binance_symbol_var.get().strip().upper()
             interval = self.binance_interval_var.get().strip()
-            limit = int(self.binance_limit_var.get().strip())
-            qty = float(self.binance_qty_var.get().strip())
+            limit = self._validate_positive_int(self.binance_limit_var.get().strip(), "Limit candles")
+            qty = self._validate_positive_float(self.binance_qty_var.get().strip(), "Qty")
             execute = self.binance_execute_var.get()
             testnet = self.binance_testnet_var.get()
 
             summary = run_ai_signal(symbol=symbol, interval=interval, limit=limit, exchange="binance")
             self.root.after(0, lambda: self._log_exec(f"1) Señal IA Binance: {summary}"))
 
-            self.scanner.configure(
-                market_type=self.market_var.get().strip(),
-                testnet=testnet,
-                fee_rate=float(self.fee_var.get()),
-            )
+            self.scanner.configure(market_type=self.market_var.get().strip(), testnet=testnet, fee_rate=float(self.fee_var.get()))
             scan = self.scanner.scan(
                 start_usdt=qty,
                 max_paths=5,
-                max_assets=int(self.max_assets_var.get()),
+                max_assets=self._validate_positive_int(self.max_assets_var.get().strip(), "Max assets"),
                 min_clean_profit_usdt=float(self.min_clean_profit_var.get()),
             )
 
-            self.root.after(0, lambda: self._log_exec(f"2) Rutas limpias encontradas: {len(scan.opportunities)}"))
             if scan.opportunities:
                 best = scan.opportunities[0]
-                self.root.after(0, lambda: self._log_exec(
-                    f"3) Mejor ruta: {' -> '.join(best.path)} | net={best.net_profit_usdt:.6f} USDT | fee={best.total_fees_usdt:.6f}"
-                ))
+                best_path = " -> ".join(best.path)
+                net = best.net_profit_usdt
+                self.root.after(0, lambda: self._log_exec(f"2) Mejor ruta limpia: {best_path} | net={net:.6f} USDT"))
             else:
-                self.root.after(0, lambda: self._log_exec("3) No hay rutas con ganancia limpia en este ciclo."))
+                best_path = "N/A"
+                net = 0.0
+                self.root.after(0, lambda: self._log_exec("2) No hay rutas limpias en este ciclo."))
+
+            mode = "SIM" if not execute else "OPERATIVO"
+            status = "OK" if scan.opportunities else "SIN_RUTAS"
+            self.root.after(0, lambda: self._record_trade(symbol, summary["signal"], best_path, net, mode, status))
 
             if not execute:
-                self.root.after(0, lambda: self._log_exec("4) Modo simulación: no se envía orden real (recomendado)."))
+                self.root.after(0, lambda: self._log_exec("3) Modo simulación activo: sin envío de orden real."))
             else:
-                self.root.after(0, lambda: self._log_exec(
-                    "4) Ejecución real Binance no habilitada en este módulo; usar sólo como señal + verificación."))
+                self.root.after(0, lambda: self._log_exec("3) Modo operativo marcado: validar OMS/Exchange connector antes de producción."))
 
             self.root.after(0, lambda: self.status_var.set(f"Flujo Binance unificado OK ({summary['signal']})"))
         except Exception as exc:  # noqa: BLE001
@@ -366,16 +395,11 @@ class ArbitrageApp:
     def _scan_worker(self):
         try:
             self._configure_scanner()
-            start_usdt = float(self.usdt_var.get())
-            max_assets = int(self.max_assets_var.get())
+            start_usdt = self._validate_positive_float(self.usdt_var.get().strip(), "Capital inicial")
+            max_assets = self._validate_positive_int(self.max_assets_var.get().strip(), "Max assets")
             min_clean_profit = float(self.min_clean_profit_var.get())
 
-            output = self.scanner.scan(
-                start_usdt=start_usdt,
-                max_paths=40,
-                max_assets=max_assets,
-                min_clean_profit_usdt=min_clean_profit,
-            )
+            output = self.scanner.scan(start_usdt=start_usdt, max_paths=40, max_assets=max_assets, min_clean_profit_usdt=min_clean_profit)
             self.root.after(0, lambda: self._render_output(output))
             self.root.after(0, lambda: self.status_var.set(f"Scan limpio completado: {len(output.opportunities)} rutas"))
         except Exception as exc:  # noqa: BLE001
@@ -441,10 +465,10 @@ class ArbitrageApp:
             return
 
         row = self.last_output.opportunities[idx]
-        initial_capital = float(self.usdt_var.get())
-        cycles = int(self.compound_cycles_var.get())
-        trigger_multiple = float(self.compound_trigger_multiple_var.get())
-        compound_stake_pct = float(self.compound_stake_pct_var.get())
+        initial_capital = self._validate_positive_float(self.usdt_var.get().strip(), "Capital inicial")
+        cycles = self._validate_positive_int(self.compound_cycles_var.get().strip(), "Ciclos")
+        trigger_multiple = self._validate_positive_float(self.compound_trigger_multiple_var.get().strip(), "Trigger")
+        compound_stake_pct = self._validate_positive_float(self.compound_stake_pct_var.get().strip(), "Stake")
 
         compound = self.scanner.simulate_compound_plan(
             initial_capital_usdt=initial_capital,
@@ -471,11 +495,7 @@ class ArbitrageApp:
             f"- Trigger alcanzado: {compound.trigger_reached}\n"
             f"- Ciclo de trigger: {compound.trigger_cycle}\n"
             f"- Modo stake: {compound.stake_mode}\n"
-            f"- Net % por ciclo asumido: {compound.per_cycle_net_pct:.4f}%\n\n"
-            "Regla aplicada:\n"
-            "1) Hasta duplicar capital, se usa 100% del capital por ciclo (según ejemplo).\n"
-            "2) Tras duplicar (ej. 10 -> 20), se activa compuesto con 10% del capital/ciclo.\n"
-            "3) Sólo se listan ciclos con ganancia neta limpia > mínimo configurado.\n"
+            f"- Net % por ciclo asumido: {compound.per_cycle_net_pct:.4f}%\n"
         )
         self.detail_text.delete("1.0", tk.END)
         self.detail_text.insert("1.0", text)

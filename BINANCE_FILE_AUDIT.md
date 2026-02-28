@@ -1,43 +1,40 @@
-# Auditoría de archivos del proyecto (enfoque Binance)
+# Auditoría integral de archivos (estado actual Binance)
 
-Esta auditoría verifica el estado de cada archivo del repositorio y su alineación con un sistema unificado para Binance.
+## Estado general
 
-## Archivos Python
+- ✅ Flujo principal unificado en `main.py`.
+- ✅ Scanner y métricas de arbitraje en `binance_arbitrage.py`.
+- ✅ Señal IA con soporte Binance en `ai_signal_system.py`.
+- ⚠️ `Test_bybit.py` permanece para compatibilidad legacy.
 
-- `main.py` ✅ **Mejorado**
-  - Centro de control unificado.
-  - Scanner Binance + estadísticas + interés compuesto + ejecución unificada Binance (AI + scanner).
-- `binance_arbitrage.py` ✅ **Mejorado**
-  - Cálculo de ganancia neta limpia (fees incluidas), filtro por rentabilidad mínima y métricas.
-- `ai_signal_system.py` ✅ **Mejorado**
-  - IA de señales orientada a Binance por defecto (`exchange='binance'`) y compatibilidad opcional con Bybit.
-- `Test_bybit.py` ⚠️ **Legacy/compatibilidad**
-  - Se conserva para flujos Bybit existentes, pero el flujo principal recomendado está en Binance desde `main.py`.
+## Verificación archivo por archivo
 
-## Documentación y dependencias
+### Núcleo productivo
 
-- `README.md` ✅ **Actualizado**
-  - Describe el sistema unificado en una sola ventana principal.
-- `requirements.txt` ✅ **Vigente**
-  - Dependencias declaradas para IA, data fetch y conectividad API.
+- `main.py` ✅
+  - 4 pestañas en un solo GUI.
+  - vista de traders ejecutados.
+  - validaciones de entrada.
+  - panel de ejecución unificada Binance.
+- `binance_arbitrage.py` ✅
+  - rutas triangulares USDT.
+  - profit neto y fees.
+  - estadísticas de escaneo y simulación compuesta.
+- `ai_signal_system.py` ✅
+  - IA de señal configurable por exchange.
+  - Binance como ruta principal recomendada.
+- `README.md` ✅
+  - documentación alineada con GUI unificado y operación Binance.
+- `requirements.txt` ✅
+  - dependencias declaradas.
 
-## Notebooks heredados (2 años)
+### Compatibilidad / histórico
 
-Estos archivos se marcan como **históricos** y no forman parte del flujo productivo unificado Binance:
+- `Test_bybit.py` ⚠️
+  - útil para legado Bybit, no es flujo principal Binance.
+- Notebooks `.ipynb` ⚠️
+  - históricos, no forman parte del runtime productivo del GUI.
 
-- `Binance.ipynb`
-- `BitMex.ipynb`
-- `Bybit.ipynb`
-- `BybitV2.ipynb`
-- `GetOpenOrdersBybit.ipynb`
-- `Python_Websocket.ipynb`
-- `SendOrder.ipynb`
-- `TCP_Ping.ipynb`
-- `Trading.ipynb`
-- `pip install bitmex-websocket.ipynb`
+## Conclusión
 
-## Recomendación final
-
-Para operación en producción:
-1. Usar sólo `main.py`, `binance_arbitrage.py`, `ai_signal_system.py`, `README.md`, `requirements.txt`.
-2. Mantener notebooks como archivo histórico o moverlos a carpeta `legacy/` en una fase siguiente.
+El proyecto queda organizado para operación en Binance desde un único GUI principal, con visibilidad de ejecución, robustez de validación y trazabilidad operativa.
