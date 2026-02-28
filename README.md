@@ -1,53 +1,49 @@
 # HFTCryptoArbitrage
 
-Plataforma de arbitraje triangular Binance con GUI avanzada y enfoque en **ganancia limpia neta**.
+Sistema unificado en una sola ventana principal (`main.py`) para:
 
-## Qué hace ahora (según tu regla)
+- Scanner de arbitraje triangular Binance (`USDT -> A -> B -> USDT`).
+- Cálculo de ganancia limpia neta (incluye comisiones por ciclo).
+- Simulación de interés compuesto con trigger al duplicar capital.
+- Señales IA para Bybit y ejecución opcional desde la misma GUI.
 
-- Analiza ciclos `USDT -> A -> B -> USDT`.
-- Calcula por cada ciclo:
-  - final bruto (sin comisiones),
-  - comisiones totales del ciclo,
-  - final neto,
-  - ganancia neta limpia en USDT y en %.
-- Filtra y muestra solo rutas con **ganancia limpia > mínimo** configurable.
+## Todo unificado en la ventana principal
 
-## Soporte de mercado/red
+En `main.py` ahora tienes 4 pestañas integradas:
 
-- Spot + Perpetuals (USDT-M).
-- Mainnet + Testnet.
+1. **Configuración**
+   - API keys, mercado, red, fee, filtros de ganancia limpia.
+2. **Scanner**
+   - Escaneo y ranking de rutas rentables netas.
+3. **Estadística / interés compuesto**
+   - KPIs, historial y simulación compuesta.
+4. **Ejecución unificada (AI + Bybit)**
+   - Análisis IA de señal.
+   - Flujo completo IA -> decisión -> ejecución opcional (dry-run o real).
 
-## Interés compuesto (regla solicitada)
+## Regla de rentabilidad limpia
 
-Se añadió simulación con tu lógica:
+Cada ciclo calcula:
+- final bruto,
+- comisiones totales,
+- final neto,
+- ganancia neta limpia.
 
-1. Capital inicial (ejemplo: 10 USDT).
-2. Hasta duplicar el capital (10 -> 20), fase pre-trigger.
-3. Cuando llega al doble, se activa compuesto con **10% del capital por ciclo** (configurable).
-4. El crecimiento se aplica con la rentabilidad neta limpia estimada por ciclo.
+Solo se muestran rutas con ganancia neta limpia superior al mínimo configurado.
 
-## GUI (`main.py`)
+## Regla de interés compuesto solicitada
 
-Incluye:
-- configuración API,
-- selector mercado/red,
-- fee y mínimo de ganancia limpia,
-- KPI en tiempo real,
-- tabla con detalle de fees/gross/net,
-- historial de escaneos,
-- panel de detalle con simulación de interés compuesto.
+- Capital inicial (ej. 10 USDT).
+- Hasta duplicar capital (10 -> 20), fase pre-trigger.
+- Al duplicar, se activa compuesto usando 10% del capital por ciclo (configurable).
 
-## Ejecución
+## Ejecutar
 
 ```bash
 python3 -m pip install -r requirements.txt
 python3 main.py
 ```
 
-## Nota realista
+## Nota
 
-El sistema garantiza cálculo neto de comisiones dentro del modelo, pero en real pueden afectar:
-- slippage,
-- latencia,
-- profundidad de libro,
-- fills parciales.
+El modelo es neto de comisiones, pero en real pueden afectar slippage, latencia y liquidez del libro.

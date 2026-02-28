@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import threading
 import tkinter as tk
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from tkinter import messagebox, ttk
 
@@ -42,6 +42,13 @@ class ArbitrageApp:
         self.compound_trigger_multiple_var = tk.StringVar(value="2.0")
         self.compound_stake_pct_var = tk.StringVar(value="0.10")
 
+        self.bybit_symbol_var = tk.StringVar(value="BTCUSDT")
+        self.bybit_qty_var = tk.StringVar(value="0.001")
+        self.bybit_interval_var = tk.StringVar(value="1")
+        self.bybit_limit_var = tk.StringVar(value="300")
+        self.bybit_testnet_var = tk.BooleanVar(value=True)
+        self.bybit_execute_var = tk.BooleanVar(value=False)
+
         self.status_var = tk.StringVar(value="Listo")
         self.kpi_scan_ms = tk.StringVar(value="0 ms")
         self.kpi_success = tk.StringVar(value="0.00%")
@@ -58,13 +65,16 @@ class ArbitrageApp:
         config_frame = ttk.Frame(notebook, padding=10)
         scan_frame = ttk.Frame(notebook, padding=10)
         details_frame = ttk.Frame(notebook, padding=10)
+        execution_frame = ttk.Frame(notebook, padding=10)
         notebook.add(config_frame, text="Configuración")
         notebook.add(scan_frame, text="Scanner")
         notebook.add(details_frame, text="Estadística / interés compuesto")
+        notebook.add(execution_frame, text="Ejecución unificada (AI + Bybit)")
 
         self._build_config_tab(config_frame)
         self._build_scan_tab(scan_frame)
         self._build_details_tab(details_frame)
+        self._build_execution_tab(execution_frame)
 
     def _build_config_tab(self, frame: ttk.Frame):
         frame.columnconfigure(1, weight=1)
@@ -165,6 +175,47 @@ class ArbitrageApp:
         self.detail_text = tk.Text(frame, height=12, wrap="word")
         self.detail_text.grid(row=3, column=0, sticky="nsew")
 
+    def _build_execution_tab(self, frame: ttk.Frame):
+        frame.columnconfigure(1, weight=1)
+        frame.rowconfigure(9, weight=1)
+
+        ttk.Label(frame, text="Bybit Symbol").grid(row=0, column=0, sticky="w", pady=4)
+        ttk.Entry(frame, textvariable=self.bybit_symbol_var).grid(row=0, column=1, sticky="ew", pady=4)
+
+        ttk.Label(frame, text="Qty").grid(row=1, column=0, sticky="w", pady=4)
+        ttk.Entry(frame, textvariable=self.bybit_qty_var).grid(row=1, column=1, sticky="ew", pady=4)
+
+        ttk.Label(frame, text="Interval").grid(row=2, column=0, sticky="w", pady=4)
+        ttk.Entry(frame, textvariable=self.bybit_interval_var).grid(row=2, column=1, sticky="ew", pady=4)
+
+        ttk.Label(frame, text="Limit candles").grid(row=3, column=0, sticky="w", pady=4)
+        ttk.Entry(frame, textvariable=self.bybit_limit_var).grid(row=3, column=1, sticky="ew", pady=4)
+
+        ttk.Checkbutton(frame, text="Bybit Testnet", variable=self.bybit_testnet_var).grid(
+            row=4, column=0, sticky="w", pady=4
+        )
+        ttk.Checkbutton(frame, text="Ejecutar orden real (si señal != HOLD)", variable=self.bybit_execute_var).grid(
+            row=4, column=1, sticky="w", pady=4
+        )
+
+        buttons = ttk.Frame(frame)
+        buttons.grid(row=5, column=0, columnspan=2, sticky="w", pady=8)
+        ttk.Button(buttons, text="Analizar IA Bybit", command=self._run_bybit_ai).pack(side="left", padx=4)
+        ttk.Button(buttons, text="Ejecutar flujo unificado", command=self._run_unified_flow).pack(side="left", padx=4)
+
+        ttk.Label(
+            frame,
+            text=(
+                "Este panel unifica IA + ejecución: primero calcula señal con ai_signal_system, "
+                "luego (opcional) envía orden en Bybit con reglas de seguridad."
+            ),
+            foreground="#8b0000",
+            wraplength=1100,
+        ).grid(row=6, column=0, columnspan=2, sticky="w", pady=4)
+
+        self.execution_text = tk.Text(frame, height=16, wrap="word")
+        self.execution_text.grid(row=9, column=0, columnspan=2, sticky="nsew", pady=6)
+
     def _kpi_card(self, parent, title: str, value_var: tk.StringVar):
         card = ttk.Frame(parent, padding=8)
         ttk.Label(card, text=title).pack(anchor="w")
@@ -184,6 +235,12 @@ class ArbitrageApp:
             "compound_cycles": self.compound_cycles_var.get().strip(),
             "compound_trigger_multiple": self.compound_trigger_multiple_var.get().strip(),
             "compound_stake_pct": self.compound_stake_pct_var.get().strip(),
+            "bybit_symbol": self.bybit_symbol_var.get().strip(),
+            "bybit_qty": self.bybit_qty_var.get().strip(),
+            "bybit_interval": self.bybit_interval_var.get().strip(),
+            "bybit_limit": self.bybit_limit_var.get().strip(),
+            "bybit_testnet": self.bybit_testnet_var.get(),
+            "bybit_execute": self.bybit_execute_var.get(),
         }
         CONFIG_PATH.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         self.status_var.set("Configuración guardada")
@@ -204,9 +261,78 @@ class ArbitrageApp:
             self.compound_cycles_var.set(payload.get("compound_cycles", "50"))
             self.compound_trigger_multiple_var.set(payload.get("compound_trigger_multiple", "2.0"))
             self.compound_stake_pct_var.set(payload.get("compound_stake_pct", "0.10"))
+            self.bybit_symbol_var.set(payload.get("bybit_symbol", "BTCUSDT"))
+            self.bybit_qty_var.set(payload.get("bybit_qty", "0.001"))
+            self.bybit_interval_var.set(payload.get("bybit_interval", "1"))
+            self.bybit_limit_var.set(payload.get("bybit_limit", "300"))
+            self.bybit_testnet_var.set(bool(payload.get("bybit_testnet", True)))
+            self.bybit_execute_var.set(bool(payload.get("bybit_execute", False)))
             self.status_var.set("Configuración cargada")
         except Exception as exc:  # noqa: BLE001
             self.status_var.set(f"No se pudo cargar configuración: {exc}")
+
+    def _log_exec(self, text: str):
+        self.execution_text.insert("end", f"{text}\n")
+        self.execution_text.see("end")
+
+    def _run_bybit_ai(self):
+        threading.Thread(target=self._run_bybit_ai_worker, daemon=True).start()
+
+    def _run_bybit_ai_worker(self):
+        try:
+            from ai_signal_system import run as run_ai_signal
+
+            symbol = self.bybit_symbol_var.get().strip().upper()
+            interval = self.bybit_interval_var.get().strip()
+            limit = int(self.bybit_limit_var.get().strip())
+            summary = run_ai_signal(symbol=symbol, interval=interval, limit=limit)
+            self.root.after(0, lambda: self._log_exec(f"AI summary: {summary}"))
+            self.root.after(0, lambda: self.status_var.set(f"AI Bybit OK: {summary['signal']}"))
+        except Exception as exc:  # noqa: BLE001
+            self.root.after(0, lambda: self._log_exec(f"Error AI Bybit: {exc}"))
+            self.root.after(0, lambda: self.status_var.set(f"Error AI Bybit: {exc}"))
+
+    def _run_unified_flow(self):
+        threading.Thread(target=self._run_unified_flow_worker, daemon=True).start()
+
+    def _run_unified_flow_worker(self):
+        try:
+            from ai_signal_system import run as run_ai_signal
+            from Test_bybit import create_session, current_milli_time, get_available_usdt, place_market_order
+
+            symbol = self.bybit_symbol_var.get().strip().upper()
+            interval = self.bybit_interval_var.get().strip()
+            limit = int(self.bybit_limit_var.get().strip())
+            qty = self.bybit_qty_var.get().strip()
+            execute = self.bybit_execute_var.get()
+            testnet = self.bybit_testnet_var.get()
+
+            summary = run_ai_signal(symbol=symbol, interval=interval, limit=limit)
+            self.root.after(0, lambda: self._log_exec(f"1) Señal IA: {summary}"))
+
+            if not execute:
+                self.root.after(0, lambda: self._log_exec("2) Dry-run activo: no se envía orden."))
+                return
+
+            if summary["signal"] == "HOLD":
+                self.root.after(0, lambda: self._log_exec("2) Señal HOLD: orden cancelada por seguridad."))
+                return
+
+            side = "Buy" if summary["signal"] == "BUY" else "Sell"
+            session = create_session(testnet=testnet)
+            before = get_available_usdt(session)
+            t0 = current_milli_time()
+            order = place_market_order(session, symbol, side, qty)
+            t1 = current_milli_time()
+            after = get_available_usdt(session)
+
+            self.root.after(0, lambda: self._log_exec(f"3) Orden enviada: side={side}, qty={qty}, symbol={symbol}"))
+            self.root.after(0, lambda: self._log_exec(f"4) Respuesta orden: {order}"))
+            self.root.after(0, lambda: self._log_exec(f"5) Latencia: {t1 - t0}ms | USDT antes={before} | después={after}"))
+            self.root.after(0, lambda: self.status_var.set(f"Flujo unificado OK ({summary['signal']})"))
+        except Exception as exc:  # noqa: BLE001
+            self.root.after(0, lambda: self._log_exec(f"Error flujo unificado: {exc}"))
+            self.root.after(0, lambda: self.status_var.set(f"Error flujo unificado: {exc}"))
 
     def _configure_scanner(self):
         self.scanner.configure(
@@ -276,7 +402,7 @@ class ArbitrageApp:
         self._append_history(output)
 
     def _append_history(self, output: ScanOutput):
-        ts = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
+        ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
         row = (
             ts,
             output.stats.market_type,
