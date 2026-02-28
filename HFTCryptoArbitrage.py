@@ -392,9 +392,17 @@ class AISignalEngine:
 class ArbitrageApp:
     def __init__(self, root: tk.Tk):
         self.root = root
-        self.root.title("HFTCryptoArbitrage - Professional Control Center")
-        self.root.geometry("1460x900")
-        self.root.minsize(1200, 760)
+        self.root.title("🚀 HFTCryptoArbitrage | Sistema Unificado")
+        self.root.geometry("1600x900")
+        self.root.minsize(1200, 700)
+
+        self.theme = {
+            "bg": "#f8f9fa", "fg": "#212529",
+            "primary": "#0d6efd", "success": "#198754",
+            "warning": "#ffc107", "danger": "#dc3545",
+            "card_bg": "#ffffff", "border": "#dee2e6",
+            "profit": "#198754", "loss": "#dc3545", "neutral": "#6c757d"
+        }
 
         self.dark_mode = tk.BooleanVar(value=False)
         self.scanner = BinanceArbitrageScanner()
@@ -408,22 +416,33 @@ class ArbitrageApp:
         self.toast_window: Optional[tk.Toplevel] = None
         self._pulse_on = False
 
-        # Vars
+        self._init_variables()
+
+        self._setup_style()
+        self._build_main_layout()
+        self._setup_keyboard_shortcuts()
+        self._load_config()
+        self._update_status("Sistema listo • Conectado a Binance Testnet", "info")
+
+
+    def _init_variables(self):
+        """Inicializa variables de control con defaults robustos."""
         self.api_key_var = tk.StringVar()
         self.api_secret_var = tk.StringVar()
         self.market_var = tk.StringVar(value="spot")
         self.network_var = tk.StringVar(value="testnet")
-        self.usdt_var = tk.StringVar(value="10")
+        self.usdt_var = tk.StringVar(value="100.00")
         self.fee_var = tk.StringVar(value="0.001")
         self.max_assets_var = tk.StringVar(value="120")
-        self.min_clean_profit_var = tk.StringVar(value="0.0001")
+        self.min_clean_profit_var = tk.StringVar(value="0.01")
+        self.min_profit_var = self.min_clean_profit_var
 
         self.compound_cycles_var = tk.StringVar(value="50")
         self.compound_trigger_multiple_var = tk.StringVar(value="2.0")
         self.compound_stake_pct_var = tk.StringVar(value="0.10")
 
         self.binance_symbol_var = tk.StringVar(value="BTCUSDT")
-        self.binance_qty_var = tk.StringVar(value="10")
+        self.binance_qty_var = tk.StringVar(value="100.00")
         self.binance_interval_var = tk.StringVar(value="1m")
         self.binance_limit_var = tk.StringVar(value="300")
         self.binance_testnet_var = tk.BooleanVar(value=True)
@@ -431,15 +450,17 @@ class ArbitrageApp:
 
         self.search_var = tk.StringVar(value="")
         self.status_var = tk.StringVar(value="Listo")
+        self.status_type_var = tk.StringVar(value="info")
         self.kpi_scan_ms = tk.StringVar(value="0 ms")
         self.kpi_success = tk.StringVar(value="0.00%")
         self.kpi_best = tk.StringVar(value="0.0000%")
         self.kpi_avg = tk.StringVar(value="0.0000%")
 
-        self._setup_style()
+    def _build_main_layout(self):
         self._build_ui()
+
+    def _setup_keyboard_shortcuts(self):
         self._bind_shortcuts()
-        self._load_config()
 
     def _setup_style(self):
         self.style = ttk.Style()
@@ -495,12 +516,28 @@ class ArbitrageApp:
         self._build_tab_stats()
         self._build_tab_exec()
 
-        # Status bar
+        self._build_statusbar()
+
+    def _build_statusbar(self):
         status = ttk.Frame(self.root)
         status.grid(row=2, column=0, sticky="ew", padx=8, pady=(2, 8))
         self.dot = tk.Label(status, text="●", fg="#6b7280")
         self.dot.pack(side="left", padx=(0, 6))
         ttk.Label(status, textvariable=self.status_var, style="Status.TLabel").pack(side="left")
+        ttk.Label(status, text="v1.2.0 • Python 3.10+", font=("Segoe UI", 8), foreground=self.theme["neutral"]).pack(side="right")
+        self._update_connection_indicator("disconnected")
+
+    def _build_config_tab(self):
+        self._build_tab_config()
+
+    def _build_scanner_tab(self):
+        self._build_tab_scan()
+
+    def _build_stats_tab(self):
+        self._build_tab_stats()
+
+    def _build_execution_tab(self):
+        self._build_tab_exec()
 
     def _build_tab_config(self):
         f = self.tab_config
@@ -598,8 +635,8 @@ class ArbitrageApp:
             self.tree.column(c, width=widths[c], anchor=anchor)
         self.tree.grid(row=3, column=0, sticky="nsew")
         self.tree.bind("<<TreeviewSelect>>", self._on_row_select)
-        self.tree.tag_configure("profit", foreground="#059669")
-        self.tree.tag_configure("loss", foreground="#dc2626")
+        self.tree.tag_configure("profit", foreground=self.theme["profit"])
+        self.tree.tag_configure("loss", foreground=self.theme["loss"])
         self.tree.tag_configure("best", background="#dbeafe")
 
     def _build_tab_stats(self):
@@ -680,10 +717,11 @@ class ArbitrageApp:
         self._pulse_on = busy
         if busy:
             self.progress.start(10)
+            self._update_status("Procesando operación...", "processing")
             self._pulse_dot()
         else:
             self.progress.stop()
-            self.dot.configure(fg="#6b7280")
+            self._update_status("Listo", "info")
 
     def _pulse_dot(self):
         if not self._pulse_on:
@@ -704,6 +742,39 @@ class ArbitrageApp:
         tk.Label(tw, text=message, bg="#1f2937", fg="white").pack(fill="both", expand=True)
         self.toast_window = tw
         self.root.after(2200, lambda: tw.destroy() if tw.winfo_exists() else None)
+
+    def _update_connection_indicator(self, state: str):
+        if not hasattr(self, "dot"):
+            return
+        cmap = {"connected": "#198754", "disconnected": "#6c757d", "error": "#dc3545", "processing": "#ffc107", "info": "#0d6efd"}
+        self.dot.configure(fg=cmap.get(state, "#6c757d"))
+
+    def _update_status(self, message: str, level: str = "info"):
+        self.status_var.set(message)
+        self.status_type_var.set(level)
+        if "error" in level.lower():
+            self._update_connection_indicator("error")
+        elif "success" in level.lower() or "ok" in message.lower():
+            self._update_connection_indicator("connected")
+        elif "processing" in level.lower():
+            self._update_connection_indicator("processing")
+        else:
+            self._update_connection_indicator("info")
+
+    def _show_help(self):
+        messagebox.showinfo("Ayuda", "Atajos: Ctrl+S Guardar | F5 Escanear | Esc Detener AutoScan")
+
+    def _copy_config(self):
+        data = {
+            "market": self.market_var.get(),
+            "network": self.network_var.get(),
+            "usdt": self.usdt_var.get(),
+            "fee": self.fee_var.get(),
+            "max_assets": self.max_assets_var.get(),
+        }
+        self.root.clipboard_clear()
+        self.root.clipboard_append(json.dumps(data, ensure_ascii=False, indent=2))
+        self._toast("Configuración copiada")
 
     def _save_config(self):
         payload = {
