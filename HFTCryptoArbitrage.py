@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import math
 import threading
@@ -361,18 +363,18 @@ COLORS = {
 # Sidebar width
 SIDEBAR_W = 230
 
-FONT_MONO    = ("Consolas", 10)
-FONT_MONO_SM = ("Consolas", 9)
-FONT_MONO_LG = ("Consolas", 11, "bold")
-FONT_HEADING = ("Segoe UI Semibold", 15, "bold")
-FONT_SUBHEADING = ("Segoe UI", 11, "bold")
-FONT_BODY    = ("Segoe UI", 10)
-FONT_SMALL   = ("Segoe UI", 9)
-FONT_TINY    = ("Segoe UI", 8)
-FONT_MICRO   = ("Segoe UI", 7)
-FONT_KPI_LG  = ("Segoe UI", 22, "bold")
-FONT_KPI_SM  = ("Segoe UI", 16, "bold")
-FONT_LABEL   = ("Segoe UI", 9)
+FONT_MONO    = ("Consolas", 12)
+FONT_MONO_SM = ("Consolas", 11)
+FONT_MONO_LG = ("Consolas", 14, "bold")
+FONT_HEADING = ("Segoe UI Semibold", 20, "bold")
+FONT_SUBHEADING = ("Segoe UI", 14, "bold")
+FONT_BODY    = ("Segoe UI", 12)
+FONT_SMALL   = ("Segoe UI", 11)
+FONT_TINY    = ("Segoe UI", 10)
+FONT_MICRO   = ("Segoe UI", 9)
+FONT_KPI_LG  = ("Segoe UI", 28, "bold")
+FONT_KPI_SM  = ("Segoe UI", 20, "bold")
+FONT_LABEL   = ("Segoe UI", 11)
 
 
 # ==========================
@@ -940,6 +942,10 @@ class StatusBar(tk.Frame):
                                       fg=COLORS["accent"], bg=COLORS["accent_glow"],
                                       padx=6, pady=2)
         self._market_badge.pack(side="left", padx=(0, 12))
+        self._auto_exec = tk.Label(right, text="AUTO: OFF", font=FONT_MICRO,
+                                   fg=COLORS["text_muted"], bg=COLORS["surface2"],
+                                   padx=6, pady=2)
+        self._auto_exec.pack(side="left", padx=(0, 12))
         self._time = tk.Label(right, text="", font=FONT_MONO_SM,
                               fg=COLORS["text_muted"], bg=COLORS["surface"])
         self._time.pack(side="left")
@@ -970,6 +976,12 @@ class StatusBar(tk.Frame):
         }
         self._status.configure(fg=color_map.get(level, COLORS["text_dim"]))
         self._dot.configure(fg=dot_map.get(level, COLORS["text_muted"]))
+
+    def set_auto_execute(self, enabled: bool):
+        if enabled:
+            self._auto_exec.configure(text="AUTO: ON", fg=COLORS["green"], bg=COLORS["accent_glow"])
+        else:
+            self._auto_exec.configure(text="AUTO: OFF", fg=COLORS["text_muted"], bg=COLORS["surface2"])
 
     def start_pulse(self):
         self._pulse_state = True
@@ -1279,19 +1291,8 @@ class PageConfig(tk.Frame):
             ("Cantidad (USDT)",  StyledEntry, self.app.binance_qty_var),
             ("Intervalo",        StyledEntry, self.app.binance_interval_var),
             ("Limit (velas)",    StyledEntry, self.app.binance_limit_var),
+            ("Modo Orden",       StyledCombobox, self.app.order_mode_var, ("simulador", "testnet", "real")),
         ])
-        chk_body = tk.Frame(scroll_area, bg=COLORS["bg"], padx=20, pady=8)
-        chk_body.pack(fill="x")
-        for txt, var in [
-            ("Binance Testnet",        self.app.binance_testnet_var),
-            ("Ejecución operativa",    self.app.binance_execute_var),
-        ]:
-            chk = tk.Checkbutton(chk_body, text=txt, variable=var,
-                                 bg=COLORS["bg"], fg=COLORS["text_dim"], font=FONT_SMALL,
-                                 activebackground=COLORS["bg"], activeforeground=COLORS["purple"],
-                                 selectcolor=COLORS["purple_dim"], cursor="hand2",
-                                 highlightthickness=0)
-            chk.pack(side="left", padx=(0, 24))
 
         # Bottom padding
         tk.Frame(scroll_area, bg=COLORS["bg"], height=20).pack()
@@ -1393,6 +1394,16 @@ class PageExec(tk.Frame):
                  font=FONT_SMALL, fg=COLORS["text_muted"], bg=COLORS["surface"]).pack(anchor="w")
         btn_row = tk.Frame(hdr_inner, bg=COLORS["surface"])
         btn_row.pack(side="right")
+        tk.Checkbutton(btn_row, text="Auto-ejecutar oportunidades",
+                       variable=self.app.auto_execute_var,
+                       bg=COLORS["surface"], fg=COLORS["text_muted"],
+                       activebackground=COLORS["surface"], activeforeground=COLORS["accent"],
+                       selectcolor=COLORS["surface3"], font=FONT_SMALL, cursor="hand2").pack(side="left", padx=8)
+        mode_box = tk.Frame(btn_row, bg=COLORS["surface"])
+        mode_box.pack(side="left", padx=6)
+        tk.Label(mode_box, text="Modo", font=FONT_SMALL, fg=COLORS["text_muted"],
+                 bg=COLORS["surface"]).pack(side="left", padx=(0, 6))
+        StyledCombobox(mode_box, self.app.order_mode_var, ("simulador", "testnet", "real")).pack(side="left")
         self.app.btn_ai = GlowButton(btn_row, "Analizar IA", command=self.app._run_binance_ai,
                                       style="purple", width=130, icon="O")
         self.app.btn_ai.pack(side="left", padx=3)
@@ -1502,6 +1513,7 @@ class ArbitrageApp:
         self.binance_limit_var = tk.StringVar(value="300")
         self.binance_testnet_var = tk.BooleanVar(value=True)
         self.binance_execute_var = tk.BooleanVar(value=False)
+        self.order_mode_var = tk.StringVar(value="simulador")
         self.autoscan_interval_var = tk.StringVar(value="5")
         self.save_keys_var = tk.BooleanVar(value=False)
         self.show_secret_var = tk.BooleanVar(value=False)
@@ -1520,6 +1532,9 @@ class ArbitrageApp:
             "avg_profit": self.kpi_avg,
             "opportunities": tk.StringVar(value="0"),
         }
+        self.auto_execute_var = tk.BooleanVar(value=False)
+        self._last_auto_path = ""
+        self._last_auto_ts = 0.0
 
     def _build_ui(self):
         self.root.columnconfigure(1, weight=1)
@@ -1548,6 +1563,7 @@ class ArbitrageApp:
         self.statusbar.grid(row=1, column=0, columnspan=2, sticky="ew")
 
         self.toast = Toast(self.root)
+        self._bind_auto_execute_toggle()
         self._navigate("scanner")
 
     def _navigate(self, key: str):
@@ -1560,6 +1576,12 @@ class ArbitrageApp:
         self.root.bind_all("<Control-s>", lambda _: self._save_config())
         self.root.bind_all("<F5>", lambda _: self._scan_once())
         self.root.bind_all("<Escape>", lambda _: self._stop_autoscan())
+
+    def _bind_auto_execute_toggle(self):
+        def _sync(*_):
+            self.statusbar.set_auto_execute(self.auto_execute_var.get())
+        self.auto_execute_var.trace_add("write", _sync)
+        _sync()
 
     def _set_busy(self, busy: bool):
         self._busy = busy
@@ -1661,6 +1683,7 @@ class ArbitrageApp:
             self.root.after(0, lambda: self._log_exec(f"Scan fallido: {exc}", "ERROR"))
         finally:
             self.root.after(0, lambda: self._set_busy(False))
+            self.root.after(80, self._auto_execute_if_profitable)
 
     def _render_output(self, output: ScanOutput):
         self.last_output = output
@@ -1738,6 +1761,25 @@ class ArbitrageApp:
 
     def _on_slider(self, value):
         self.compound_cycles_var.set(str(int(float(value))))
+
+    def _auto_execute_if_profitable(self):
+        try:
+            if not self.auto_execute_var.get():
+                return
+            if self._busy:
+                return
+            if not self.last_output or not self.last_output.opportunities:
+                return
+            best = self.last_output.opportunities[0]
+            path = " → ".join(best.path)
+            now = time.time()
+            if self._last_auto_path == path and (now - self._last_auto_ts) < 10:
+                return
+            self._last_auto_path = path
+            self._last_auto_ts = now
+            self._run_direct_market_order()
+        except Exception:
+            pass
 
     def _on_row_select(self, _event):
         if not self.last_output:
@@ -1827,11 +1869,57 @@ class ArbitrageApp:
         finally:
             self.root.after(0, lambda: self._set_busy(False))
 
+    def _binance_base_url(self, market_type: str, testnet: bool) -> str:
+        if market_type == "spot":
+            return "https://testnet.binance.vision" if testnet else "https://api.binance.com"
+        if market_type == "perpetual":
+            return "https://testnet.binancefuture.com" if testnet else "https://fapi.binance.com"
+        raise ValueError("market_type inválido")
+
+    def _binance_book_ticker(self, symbol: str, market_type: str, testnet: bool) -> dict:
+        base = self._binance_base_url(market_type, testnet)
+        endpoint = "/api/v3/ticker/bookTicker" if market_type == "spot" else "/fapi/v1/ticker/bookTicker"
+        url = f"{base}{endpoint}?symbol={symbol}"
+        data = http_get_json(url)
+        if not isinstance(data, dict):
+            raise ValueError("Respuesta de ticker inválida")
+        return data
+
+    def _binance_place_market_order(self, symbol: str, side: str, quote_qty: float, market_type: str, testnet: bool) -> dict:
+        api_key = self.api_key_var.get().strip()
+        api_secret = self.api_secret_var.get().strip()
+        if not api_key or not api_secret:
+            raise ValueError("API key/secret requeridos")
+        base = self._binance_base_url(market_type, testnet)
+        endpoint = "/api/v3/order" if market_type == "spot" else "/fapi/v1/order"
+        params = {
+            "symbol": symbol,
+            "side": side,
+            "type": "MARKET",
+            "timestamp": int(time.time() * 1000),
+            "recvWindow": 5000,
+        }
+        if side == "BUY":
+            params["quoteOrderQty"] = f"{quote_qty:.6f}"
+        else:
+            ticker = self._binance_book_ticker(symbol, market_type, testnet)
+            price = float(ticker.get("bidPrice") or ticker.get("askPrice") or 0.0)
+            if price <= 0:
+                raise ValueError("Precio inválido para venta")
+            base_qty = quote_qty / price
+            params["quantity"] = f"{base_qty:.6f}"
+        query = urlencode(params)
+        signature = hmac.new(api_secret.encode("utf-8"), query.encode("utf-8"), hashlib.sha256).hexdigest()
+        url = f"{base}{endpoint}?{query}&signature={signature}"
+        req = Request(url, method="POST", headers={"X-MBX-APIKEY": api_key, "User-Agent": "HFTCryptoArbitrage/2.0"})
+        with urlopen(req, timeout=10) as response:
+            return json.loads(response.read().decode("utf-8"))
+
     def _run_direct_market_order(self):
         if self._busy:
             return
-        if self.binance_execute_var.get():
-            if not messagebox.askyesno("Confirmar", "¿Confirmas ejecución operativa?"):
+        if self.order_mode_var.get().strip().lower() == "real":
+            if not messagebox.askyesno("Confirmar", "¿Confirmas ejecución real en Binance?"):
                 return
         threading.Thread(target=self._run_direct_market_order_worker, daemon=True).start()
 
@@ -1840,10 +1928,19 @@ class ArbitrageApp:
             self.root.after(0, lambda: self._set_busy(True))
             symbol = self.binance_symbol_var.get().strip().upper()
             qty = self._to_positive_float(self.binance_qty_var.get(), "Qty")
-            execute = self.binance_execute_var.get()
+            mode = self.order_mode_var.get().strip().lower()
+            market_type = self.market_var.get().strip().lower()
+            interval = self.binance_interval_var.get().strip()
+            limit = self._to_positive_int(self.binance_limit_var.get(), "Limit")
+            summary = self.ai_engine.run(symbol=symbol, interval=interval, limit=limit)
+            sig = summary["signal"]
+            if sig == "HOLD":
+                self.root.after(0, lambda: self.statusbar.set("Señal HOLD — orden omitida", "warn"))
+                return
+            side = "BUY" if sig == "BUY" else "SELL"
             self.scanner.configure(
-                market_type=self.market_var.get().strip(),
-                testnet=self.binance_testnet_var.get(),
+                market_type=market_type,
+                testnet=self.network_var.get().strip() == "testnet",
                 fee_rate=self._to_non_negative_float(self.fee_var.get(), "Fee"),
             )
             scan = self.scanner.scan(
@@ -1863,11 +1960,22 @@ class ArbitrageApp:
                 self.root.after(0, lambda: self.statusbar.set("Orden omitida — ganancia insuficiente", "warn"))
                 return
 
-            mode = "MERCADO" if execute else "SIM_MERCADO"
-            self.root.after(0, lambda: self._log_exec(f"Orden mercado · {path} · net={net:.6f} USDT", "OK"))
-            self.root.after(0, lambda: self._record_trade(symbol, "MARKET", path, net, mode, "OK"))
-            self.root.after(0, lambda: self.statusbar.set("Orden registrada con ganancia limpia", "success"))
-            self.root.after(0, lambda: self.toast.show("Orden de mercado registrada", "success"))
+            if mode == "simulador":
+                self.root.after(0, lambda: self._log_exec(f"Orden mercado SIM · {path} · {side} · net={net:.6f} USDT", "OK"))
+                self.root.after(0, lambda: self._record_trade(symbol, "MARKET", path, net, "SIMULADOR", "OK"))
+                self.root.after(0, lambda: self.statusbar.set("Orden simulada registrada", "success"))
+                self.root.after(0, lambda: self.toast.show("Orden simulada registrada", "success"))
+                return
+
+            testnet = mode == "testnet"
+            order = self._binance_place_market_order(symbol, side, qty, market_type, testnet)
+            order_id = order.get("orderId") or order.get("clientOrderId") or "N/A"
+            mode_label = "TESTNET" if testnet else "REAL"
+            self.root.after(0, lambda: self._log_exec(
+                f"Orden mercado {mode_label} · {path} · {side} · id={order_id} · net={net:.6f} USDT", "OK"))
+            self.root.after(0, lambda: self._record_trade(symbol, "MARKET", path, net, mode_label, "OK"))
+            self.root.after(0, lambda: self.statusbar.set(f"Orden enviada ({mode_label})", "success"))
+            self.root.after(0, lambda: self.toast.show(f"Orden enviada ({mode_label})", "success"))
         except Exception as exc:
             self.root.after(0, lambda: self._log_exec(f"Error orden mercado: {exc}", "ERROR"))
             self.root.after(0, lambda: self.statusbar.set(f"Error: {exc}", "error"))
@@ -1985,8 +2093,10 @@ class ArbitrageApp:
                 "binance_limit": self.binance_limit_var.get().strip(),
                 "binance_testnet": self.binance_testnet_var.get(),
                 "binance_execute": self.binance_execute_var.get(),
+                "order_mode": self.order_mode_var.get().strip(),
                 "autoscan_seconds": self.autoscan_interval_var.get().strip(),
                 "save_keys": self.save_keys_var.get(),
+                "auto_execute": self.auto_execute_var.get(),
             }
             CONFIG_PATH.write_text(json.dumps(payload, indent=2), encoding="utf-8")
             self.statusbar.set("Configuración guardada", "success")
@@ -2017,8 +2127,10 @@ class ArbitrageApp:
             self.binance_limit_var.set(payload.get("binance_limit", "300"))
             self.binance_testnet_var.set(bool(payload.get("binance_testnet", True)))
             self.binance_execute_var.set(bool(payload.get("binance_execute", False)))
+            self.order_mode_var.set(payload.get("order_mode", "simulador"))
             self.autoscan_interval_var.set(str(payload.get("autoscan_seconds", "5")))
             self.save_keys_var.set(bool(payload.get("save_keys", False)))
+            self.auto_execute_var.set(bool(payload.get("auto_execute", False)))
             self.statusbar.set("Configuración cargada", "info")
         except Exception as exc:
             self.statusbar.set(f"Error cargando config: {exc}", "warn")
