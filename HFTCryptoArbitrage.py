@@ -1,4 +1,4 @@
-"""HFTCryptoArbitrage - single-file unified system with enhanced professional GUI."""
+"""HFTCryptoArbitrage - Sistema Unificado con GUI de alto rendimiento visual."""
 
 from __future__ import annotations
 
@@ -83,37 +83,12 @@ class CompoundPlanResult:
 def http_get_json(url: str, timeout: int = 10) -> dict | list:
     req = Request(url, headers={"User-Agent": "HFTCryptoArbitrage/2.0"})
     try:
-        with urlopen(req, timeout=timeout) as response:  # nosec B310
+        with urlopen(req, timeout=timeout) as response:
             return json.loads(response.read().decode("utf-8"))
     except HTTPError as exc:
         raise RuntimeError(f"HTTP error {exc.code}: {exc.reason}") from exc
     except URLError as exc:
         raise RuntimeError(f"Network error: {exc.reason}") from exc
-
-
-class ToolTip:
-    def __init__(self, widget, text: str):
-        self.widget = widget
-        self.text = text
-        self.tip: Optional[tk.Toplevel] = None
-        widget.bind("<Enter>", self._show)
-        widget.bind("<Leave>", self._hide)
-
-    def _show(self, _event=None):
-        if self.tip is not None:
-            return
-        x = self.widget.winfo_rootx() + 20
-        y = self.widget.winfo_rooty() + 20
-        self.tip = tk.Toplevel(self.widget)
-        self.tip.wm_overrideredirect(True)
-        self.tip.wm_geometry(f"+{x}+{y}")
-        label = tk.Label(self.tip, text=self.text, background="#1f2937", foreground="white", relief="solid", borderwidth=1, padx=6, pady=4)
-        label.pack()
-
-    def _hide(self, _event=None):
-        if self.tip:
-            self.tip.destroy()
-            self.tip = None
 
 
 # ==========================
@@ -239,14 +214,10 @@ class BinanceArbitrageScanner:
             gross, net, fees, net_profit, profit_pct = cycle
             all_rows.append(
                 ArbitrageResult(
-                    path=path,
-                    symbols=(edges[0].symbol, edges[1].symbol, edges[2].symbol),
+                    path=path, symbols=(edges[0].symbol, edges[1].symbol, edges[2].symbol),
                     sides=(edges[0].side, edges[1].side, edges[2].side),
-                    gross_final_usdt=gross,
-                    final_usdt=net,
-                    total_fees_usdt=fees,
-                    net_profit_usdt=net_profit,
-                    profit_pct=profit_pct,
+                    gross_final_usdt=gross, final_usdt=net, total_fees_usdt=fees,
+                    net_profit_usdt=net_profit, profit_pct=profit_pct,
                     is_clean_profitable=net_profit > min_clean_profit_usdt,
                 )
             )
@@ -260,16 +231,12 @@ class BinanceArbitrageScanner:
             median = s[len(s) // 2]
 
         stats = ScanStats(
-            market_type=self.market_type,
-            testnet=self.testnet,
-            scanned_paths=scanned,
-            valid_paths=len(all_rows),
-            clean_profitable_paths=len(clean),
+            market_type=self.market_type, testnet=self.testnet, scanned_paths=scanned,
+            valid_paths=len(all_rows), clean_profitable_paths=len(clean),
             success_rate_pct=(len(clean) / len(all_rows) * 100.0) if all_rows else 0.0,
             best_profit_pct=max(profits) if profits else 0.0,
             avg_profit_pct=(sum(profits) / len(profits)) if profits else 0.0,
-            median_profit_pct=median,
-            scan_ms=int((time.time() - t0) * 1000),
+            median_profit_pct=median, scan_ms=int((time.time() - t0) * 1000),
         )
         return ScanOutput(opportunities=clean[:max_paths], stats=stats)
 
@@ -279,7 +246,6 @@ class BinanceArbitrageScanner:
         trigger = initial_capital_usdt * trigger_multiple
         reached = False
         trigger_cycle = -1
-
         for i in range(1, cycles + 1):
             if capital >= trigger:
                 if not reached:
@@ -289,13 +255,9 @@ class BinanceArbitrageScanner:
             else:
                 stake_pct = pre_trigger_stake_pct
             capital += (capital * stake_pct) * (per_cycle_net_pct / 100.0)
-
         return CompoundPlanResult(
-            initial_capital=initial_capital_usdt,
-            current_capital=capital,
-            cycles_simulated=cycles,
-            trigger_reached=reached,
-            trigger_cycle=trigger_cycle,
+            initial_capital=initial_capital_usdt, current_capital=capital,
+            cycles_simulated=cycles, trigger_reached=reached, trigger_cycle=trigger_cycle,
             stake_mode=f"pre:{pre_trigger_stake_pct*100:.1f}% | post:{compound_stake_pct*100:.1f}%",
             per_cycle_net_pct=per_cycle_net_pct,
         )
@@ -309,13 +271,8 @@ class BinanceArbitrageScanner:
             _ = self._get(self._endpoint("time"))
             env = "TESTNET" if self.testnet else "MAINNET"
             return True, f"Conectividad {env} OK para {self.market_type.upper()}"
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             return False, f"Error conectividad Binance: {exc}"
-
-
-# ==========================
-# LIGHTWEIGHT AI SIGNAL
-# ==========================
 
 
 class AISignalEngine:
@@ -329,104 +286,1204 @@ class AISignalEngine:
             raise RuntimeError("Sin klines Binance")
         return rows
 
-    def _fetch_bybit(self, symbol: str, interval: str, limit: int) -> List[list]:
-        q = urlencode({"category": "linear", "symbol": symbol, "interval": interval, "limit": limit})
-        payload = http_get_json(f"https://api.bybit.com/v5/market/kline?{q}", timeout=self.timeout)
-        if not isinstance(payload, dict) or payload.get("retCode") != 0:
-            raise RuntimeError("Error Bybit klines")
-        rows = payload.get("result", {}).get("list", [])
-        if not rows:
-            raise RuntimeError("Sin klines Bybit")
-        return sorted(rows, key=lambda x: int(x[0]))
-
     def run(self, symbol: str, interval: str, limit: int, exchange: str = "binance") -> Dict[str, float | str]:
-        ex = exchange.lower().strip()
-        if ex == "binance":
-            rows = self._fetch_binance(symbol, interval, limit)
-            closes = [float(r[4]) for r in rows]
-            ts = int(rows[-1][0])
-        elif ex == "bybit":
-            rows = self._fetch_bybit(symbol, interval, limit)
-            closes = [float(r[4]) for r in rows]
-            ts = int(rows[-1][0])
-        else:
-            raise ValueError("exchange debe ser 'binance' o 'bybit'")
-
+        rows = self._fetch_binance(symbol, interval, limit)
+        closes = [float(r[4]) for r in rows]
+        ts = int(rows[-1][0])
         if len(closes) < 40:
             raise RuntimeError("Datos insuficientes para IA")
-
         short = sum(closes[-8:]) / 8
         long_ = sum(closes[-21:]) / 21
         momentum = (short / long_) - 1.0 if long_ else 0.0
-
         rets = []
         for i in range(1, min(30, len(closes))):
             prev = closes[-i - 1]
             cur = closes[-i]
             if prev > 0:
                 rets.append((cur / prev) - 1.0)
-
         vol = math.sqrt(sum(r * r for r in rets) / len(rets)) if rets else 0.0
         score = momentum * 120 - vol * 8
         prob_up = 1.0 / (1.0 + math.exp(-max(-8.0, min(8.0, score))))
         signal = "BUY" if prob_up >= 0.58 else "SELL" if prob_up <= 0.42 else "HOLD"
-
         return {
-            "exchange": ex,
-            "symbol": symbol,
-            "interval": interval,
-            "rows": len(closes),
-            "last_close": closes[-1],
+            "exchange": exchange, "symbol": symbol, "interval": interval,
+            "rows": len(closes), "last_close": closes[-1],
             "last_candle_utc": datetime.fromtimestamp(ts / 1000.0, tz=timezone.utc).isoformat(),
             "test_accuracy": round(max(0.5, 1.0 - vol * 30), 4),
-            "probability_up": round(prob_up, 4),
-            "signal": signal,
+            "probability_up": round(prob_up, 4), "signal": signal,
         }
 
 
 # ==========================
-# GUI APP
+# PALETTE & CONSTANTS
 # ==========================
 
+COLORS = {
+    # Deep space background layers
+    "bg":           "#07090f",
+    "bg2":          "#0c0f1a",
+    "surface":      "#0f1624",
+    "surface2":     "#141d2e",
+    "surface3":     "#19243a",
+    "surface4":     "#1e2d47",
+    # Borders with glow potential
+    "border":       "#1a3050",
+    "border2":      "#223a5e",
+    "border_glow":  "#00a8cc",
+    # Cyan accent family
+    "accent":       "#00c8f0",
+    "accent_bright":"#30e0ff",
+    "accent2":      "#0090b8",
+    "accent3":      "#004f70",
+    "accent_glow":  "#003d55",
+    # Signal colors
+    "green":        "#00e5a0",
+    "green_bright": "#30ffb8",
+    "green_dim":    "#0d3a28",
+    "green_glow":   "#001f15",
+    "red":          "#ff3366",
+    "red_bright":   "#ff6088",
+    "red_dim":      "#3a0f1e",
+    "red_glow":     "#1f0010",
+    "yellow":       "#ffc200",
+    "yellow_bright":"#ffd740",
+    "yellow_dim":   "#3a2800",
+    "purple":       "#b388ff",
+    "purple_dim":   "#2a1a4a",
+    # Typography
+    "text":         "#dce8f5",
+    "text_bright":  "#f0f8ff",
+    "text_dim":     "#6888a8",
+    "text_muted":   "#334460",
+    "white":        "#ffffff",
+}
+
+# Sidebar width
+SIDEBAR_W = 230
+
+FONT_MONO    = ("Consolas", 10)
+FONT_MONO_SM = ("Consolas", 9)
+FONT_MONO_LG = ("Consolas", 11, "bold")
+FONT_HEADING = ("Segoe UI Semibold", 15, "bold")
+FONT_SUBHEADING = ("Segoe UI", 11, "bold")
+FONT_BODY    = ("Segoe UI", 10)
+FONT_SMALL   = ("Segoe UI", 9)
+FONT_TINY    = ("Segoe UI", 8)
+FONT_MICRO   = ("Segoe UI", 7)
+FONT_KPI_LG  = ("Segoe UI", 22, "bold")
+FONT_KPI_SM  = ("Segoe UI", 16, "bold")
+FONT_LABEL   = ("Segoe UI", 9)
+
+
+# ==========================
+# CUSTOM WIDGETS
+# ==========================
+
+def draw_rounded_rect(canvas, x1, y1, x2, y2, r, **kw):
+    """Draw a filled rounded rectangle on a Canvas."""
+    fill = kw.get("fill", "")
+    outline = kw.get("outline", "")
+    w = kw.get("width", 1)
+    canvas.create_arc(x1,     y1,     x1+2*r, y1+2*r, start=90,  extent=90,  style="pieslice", fill=fill, outline=fill)
+    canvas.create_arc(x2-2*r, y1,     x2,     y1+2*r, start=0,   extent=90,  style="pieslice", fill=fill, outline=fill)
+    canvas.create_arc(x1,     y2-2*r, x1+2*r, y2,     start=180, extent=90,  style="pieslice", fill=fill, outline=fill)
+    canvas.create_arc(x2-2*r, y2-2*r, x2,     y2,     start=270, extent=90,  style="pieslice", fill=fill, outline=fill)
+    canvas.create_rectangle(x1+r, y1,   x2-r, y2,   fill=fill, outline="")
+    canvas.create_rectangle(x1,   y1+r, x2,   y2-r, fill=fill, outline="")
+    if outline:
+        # Draw outline arcs
+        canvas.create_arc(x1,     y1,     x1+2*r, y1+2*r, start=90,  extent=90,  style="arc", outline=outline, width=w)
+        canvas.create_arc(x2-2*r, y1,     x2,     y1+2*r, start=0,   extent=90,  style="arc", outline=outline, width=w)
+        canvas.create_arc(x1,     y2-2*r, x1+2*r, y2,     start=180, extent=90,  style="arc", outline=outline, width=w)
+        canvas.create_arc(x2-2*r, y2-2*r, x2,     y2,     start=270, extent=90,  style="arc", outline=outline, width=w)
+        canvas.create_line(x1+r, y1,   x2-r, y1,   fill=outline, width=w)
+        canvas.create_line(x1+r, y2,   x2-r, y2,   fill=outline, width=w)
+        canvas.create_line(x1,   y1+r, x1,   y2-r, fill=outline, width=w)
+        canvas.create_line(x2,   y1+r, x2,   y2-r, fill=outline, width=w)
+
+
+class GlowButton(tk.Canvas):
+    """Premium button with glow effect and smooth hover."""
+    _STYLES = {
+        "primary": {
+            "bg_n": "#003a52", "bg_h": "#004e6e", "bg_a": "#002d40",
+            "fg": "#00c8f0", "border_n": "#006a8a", "border_h": "#00c8f0",
+            "glow": "#00304a",
+        },
+        "success": {
+            "bg_n": "#002e1e", "bg_h": "#003d28", "bg_a": "#001f14",
+            "fg": "#00e5a0", "border_n": "#005a3a", "border_h": "#00e5a0",
+            "glow": "#001a10",
+        },
+        "danger": {
+            "bg_n": "#350b18", "bg_h": "#4a1024", "bg_a": "#250810",
+            "fg": "#ff3366", "border_n": "#7a1535", "border_h": "#ff3366",
+            "glow": "#1a0510",
+        },
+        "warn": {
+            "bg_n": "#2e1f00", "bg_h": "#3d2b00", "bg_a": "#201500",
+            "fg": "#ffc200", "border_n": "#6a4800", "border_h": "#ffc200",
+            "glow": "#1a1000",
+        },
+        "ghost": {
+            "bg_n": "#141d2e", "bg_h": "#1a2840", "bg_a": "#0f1624",
+            "fg": "#6888a8", "border_n": "#1a3050", "border_h": "#2a4868",
+            "glow": "#0c1520",
+        },
+        "purple": {
+            "bg_n": "#1e0f3a", "bg_h": "#2a1550", "bg_a": "#150a28",
+            "fg": "#b388ff", "border_n": "#4a2090", "border_h": "#b388ff",
+            "glow": "#120820",
+        },
+    }
+
+    def __init__(self, parent, text, command=None, style="primary", width=148, height=36, icon="", **kwargs):
+        super().__init__(parent, width=width, height=height, bd=0, highlightthickness=0,
+                         bg=COLORS["bg"], cursor="hand2")
+        self.command = command
+        self._style_key = style
+        self.label = text
+        self.icon = icon
+        self.w = width
+        self.h = height
+        self._hover = False
+        self._press = False
+        self._disabled = False
+        self.bind("<Enter>", self._on_enter)
+        self.bind("<Leave>", self._on_leave)
+        self.bind("<ButtonPress-1>", self._on_press)
+        self.bind("<ButtonRelease-1>", self._on_release)
+        self._draw()
+
+    def _draw(self):
+        self.delete("all")
+        s = self._STYLES.get(self._style_key, self._STYLES["primary"])
+        if self._disabled:
+            bg, fg, bd = COLORS["surface2"], COLORS["text_muted"], COLORS["border"]
+        elif self._press:
+            bg, fg, bd = s["bg_a"], s["fg"], s["border_h"]
+        elif self._hover:
+            bg, fg, bd = s["bg_h"], s["fg"], s["border_h"]
+            # Outer glow when hovered
+            draw_rounded_rect(self, -2, -2, self.w+2, self.h+2, 8, fill=s["glow"], outline="")
+        else:
+            bg, fg, bd = s["bg_n"], s["fg"], s["border_n"]
+
+        draw_rounded_rect(self, 1, 1, self.w-1, self.h-1, 7, fill=bg, outline=bd)
+
+        # Top shine line
+        if not self._disabled and not self._press:
+            shine = "#ffffff" if self._hover else "#ffffff"
+            self.create_line(9, 2, self.w-9, 2, fill=shine, width=1,
+                             stipple="" if self._hover else "")
+
+        full_text = f"{self.icon}  {self.label}" if self.icon else self.label
+        self.create_text(self.w // 2, self.h // 2, text=full_text, fill=fg,
+                         font=("Segoe UI", 9, "bold"), anchor="center")
+
+    def _on_enter(self, e):
+        if not self._disabled:
+            self._hover = True; self._draw()
+
+    def _on_leave(self, e):
+        self._hover = False; self._press = False; self._draw()
+
+    def _on_press(self, e):
+        if not self._disabled:
+            self._press = True; self._draw()
+
+    def _on_release(self, e):
+        if not self._disabled:
+            self._press = False; self._draw()
+            if self.command: self.command()
+
+    def configure(self, **kwargs):
+        if "state" in kwargs:
+            self._disabled = (kwargs.pop("state") == "disabled")
+            self._draw()
+        if "text" in kwargs:
+            self.label = kwargs.pop("text"); self._draw()
+        super().configure(**kwargs)
+
+
+class KPICard(tk.Canvas):
+    """Sleek metric card with canvas-drawn gradient border and glow."""
+    def __init__(self, parent, title, value_var, unit="", accent_color=None,
+                 icon="", width=170, height=90, **kwargs):
+        super().__init__(parent, width=width, height=height, bd=0,
+                         highlightthickness=0, bg=COLORS["bg"])
+        self._accent = accent_color or COLORS["accent"]
+        self._title  = title.upper()
+        self._unit   = unit
+        self._icon   = icon
+        # Avoid shadowing tkinter's internal widget name attribute `self._w`
+        self._width_px  = width
+        self._height_px = height
+        self._var    = value_var
+        self._draw_bg()
+        # Live value label via trace
+        self._val_id = self.create_text(width//2, height//2 + 8, text="—",
+                                        fill=self._accent, font=FONT_KPI_SM, anchor="center")
+        self._title_id = self.create_text(width//2, 20, text=self._title,
+                                          fill=COLORS["text_muted"], font=FONT_MICRO, anchor="center")
+        if unit:
+            self.create_text(width//2, height - 14, text=unit, fill=COLORS["text_muted"],
+                             font=FONT_MICRO, anchor="center")
+        value_var.trace_add("write", lambda *_: self._update_val())
+        self._update_val()
+
+    def _draw_bg(self):
+        w, h = self._width_px, self._height_px
+        # Outer dark container
+        draw_rounded_rect(self, 0, 0, w, h, 8, fill=COLORS["surface2"], outline="")
+        # Subtle inner border
+        draw_rounded_rect(self, 1, 1, w-1, h-1, 7, fill="", outline=COLORS["border"])
+        # Accent top stripe
+        self.create_rectangle(8, 1, w-8, 3, fill=self._accent, outline="")
+        # Corner dots accent
+        self.create_oval(w-10, 4, w-4, 10, fill=self._accent, outline="")
+
+    def _update_val(self):
+        try:
+            val = self._var.get()
+            self.itemconfig(self._val_id, text=val)
+        except Exception:
+            pass
+
+
+class StyledEntry(tk.Frame):
+    """Dark entry field with animated focus border."""
+    def __init__(self, parent, textvariable=None, show=None, width=None, **kwargs):
+        super().__init__(parent, bg=COLORS["border"], bd=0, padx=1, pady=1)
+        inner = tk.Frame(self, bg=COLORS["surface3"])
+        inner.pack(fill="both", expand=True)
+        kw = dict(textvariable=textvariable, bg=COLORS["surface3"], fg=COLORS["text"],
+                  insertbackground=COLORS["accent"], relief="flat", font=FONT_BODY,
+                  bd=0, highlightthickness=0)
+        if show:   kw["show"] = show
+        if width:  kw["width"] = width
+        self.entry = tk.Entry(inner, **kw)
+        self.entry.pack(fill="both", expand=True, ipady=7, ipadx=10)
+        self.entry.bind("<FocusIn>",  lambda e: self.configure(bg=COLORS["accent"]))
+        self.entry.bind("<FocusOut>", lambda e: self.configure(bg=COLORS["border"]))
+
+    def configure(self, **kwargs):
+        if "show" in kwargs: self.entry.configure(show=kwargs.pop("show"))
+        super().configure(**kwargs)
+
+
+class StyledCombobox(tk.Frame):
+    """Custom dropdown with dark popup."""
+    def __init__(self, parent, textvariable=None, values=(), **kwargs):
+        super().__init__(parent, bg=COLORS["border"], bd=0, padx=1, pady=1)
+        self.var    = textvariable
+        self.values = list(values)
+        self._open  = False
+        self._evar  = textvariable or tk.StringVar()
+        inner = tk.Frame(self, bg=COLORS["surface3"])
+        inner.pack(fill="both", expand=True)
+        self.entry = tk.Entry(inner, textvariable=self._evar, bg=COLORS["surface3"],
+                              fg=COLORS["text"], relief="flat", font=FONT_BODY, bd=0,
+                              highlightthickness=0, state="readonly",
+                              readonlybackground=COLORS["surface3"], cursor="hand2")
+        self.entry.pack(side="left", fill="both", expand=True, ipady=7, ipadx=10)
+        arrow = tk.Label(inner, text="▾", font=("Segoe UI", 9), fg=COLORS["accent"],
+                         bg=COLORS["surface3"], cursor="hand2", padx=8)
+        arrow.pack(side="right")
+        for w in [self.entry, arrow]: w.bind("<Button-1>", self._toggle)
+
+    def _toggle(self, e=None):
+        self._close() if self._open else self._open_menu()
+
+    def _open_menu(self):
+        self._open = True
+        self.configure(bg=COLORS["accent"])
+        root = self.winfo_toplevel()
+        self._popup = tk.Toplevel(root)
+        self._popup.overrideredirect(True)
+        self._popup.configure(bg=COLORS["border"])
+        x = self.winfo_rootx()
+        y = self.winfo_rooty() + self.winfo_height() + 2
+        w = max(self.winfo_width(), 140)
+        h = len(self.values) * 32 + 4
+        self._popup.geometry(f"{w}x{h}+{x}+{y}")
+        self._popup.attributes("-topmost", True)
+        tk.Frame(self._popup, bg=COLORS["border"], height=1).pack(fill="x")
+        for val in self.values:
+            lbl = tk.Label(self._popup, text=val, bg=COLORS["surface3"], fg=COLORS["text"],
+                           font=FONT_BODY, anchor="w", padx=12, cursor="hand2")
+            lbl.pack(fill="x", ipady=5)
+            lbl.bind("<Enter>", lambda e, l=lbl: l.configure(bg=COLORS["accent3"], fg=COLORS["accent_bright"]))
+            lbl.bind("<Leave>", lambda e, l=lbl: l.configure(bg=COLORS["surface3"], fg=COLORS["text"]))
+            lbl.bind("<Button-1>", lambda e, v=val: self._select(v))
+        self._popup.bind("<FocusOut>", lambda e: self._close())
+
+    def _close(self):
+        self._open = False
+        self.configure(bg=COLORS["border"])
+        if hasattr(self, "_popup") and self._popup.winfo_exists():
+            self._popup.destroy()
+
+    def _select(self, val):
+        self._evar.set(val)
+        if self.var and self.var != self._evar: self.var.set(val)
+        self._close()
+
+    def get(self): return self._evar.get()
+
+
+class ActivityLog(tk.Frame):
+    """Terminal-style log with syntax highlighting."""
+    def __init__(self, parent, **kwargs):
+        super().__init__(parent, bg=COLORS["surface"], highlightthickness=1,
+                         highlightbackground=COLORS["border"], **kwargs)
+        # Header bar
+        hdr = tk.Frame(self, bg=COLORS["surface2"], padx=12, pady=5)
+        hdr.pack(fill="x")
+        dot_row = tk.Frame(hdr, bg=COLORS["surface2"])
+        dot_row.pack(side="left")
+        for color in [COLORS["red"], COLORS["yellow"], COLORS["green"]]:
+            tk.Label(dot_row, text="●", font=("Segoe UI", 8), fg=color,
+                     bg=COLORS["surface2"]).pack(side="left", padx=2)
+        tk.Label(hdr, text="ACTIVITY  LOG", font=FONT_TINY, fg=COLORS["text_muted"],
+                 bg=COLORS["surface2"], padx=8).pack(side="left")
+        # Text area
+        scr = tk.Frame(self, bg=COLORS["surface"])
+        scr.pack(fill="both", expand=True)
+        self.text = tk.Text(scr, bg=COLORS["surface"], fg=COLORS["text"],
+                            insertbackground=COLORS["accent"], relief="flat", bd=0,
+                            font=FONT_MONO_SM, wrap="word", padx=12, pady=8,
+                            highlightthickness=0, selectbackground=COLORS["accent3"],
+                            spacing1=2, spacing3=2)
+        vsb = tk.Scrollbar(scr, orient="vertical", command=self.text.yview,
+                           bg=COLORS["surface2"], troughcolor=COLORS["surface"],
+                           activebackground=COLORS["accent"], relief="flat", width=6)
+        self.text.configure(yscrollcommand=vsb.set)
+        vsb.pack(side="right", fill="y")
+        self.text.pack(side="left", fill="both", expand=True)
+        for tag, fg in [("INFO", COLORS["accent"]), ("OK", COLORS["green"]),
+                        ("WARN", COLORS["yellow"]), ("ERROR", COLORS["red"]),
+                        ("TIME", COLORS["text_muted"]), ("DIM", COLORS["text_muted"]),
+                        ("PREFIX", COLORS["surface4"])]:
+            self.text.tag_configure(tag, foreground=fg)
+
+    def log(self, message: str, level: str = "INFO"):
+        ts = datetime.now().strftime("%H:%M:%S")
+        self.text.insert("end", f"  {ts} ", "TIME")
+        lmap = {"INFO": "·", "OK": "✓", "WARN": "⚠", "ERROR": "✗"}
+        sym = lmap.get(level, "·")
+        self.text.insert("end", f"{sym} ", level if level in lmap else "DIM")
+        self.text.insert("end", f"{message}\n")
+        lines = int(float(self.text.index("end-1c").split(".")[0]))
+        if lines > 800: self.text.delete("1.0", f"{lines - 600}.0")
+        self.text.see("end")
+
+    def clear(self): self.text.delete("1.0", tk.END)
+
+
+class StyledTreeview(tk.Frame):
+    """Dark treeview with alternating row colors and custom scrollbar."""
+    def __init__(self, parent, columns, headings, widths, anchors=None, height=12, **kwargs):
+        super().__init__(parent, bg=COLORS["bg"], bd=0,
+                         highlightthickness=1, highlightbackground=COLORS["border"])
+        uid = f"T{id(self)}.Treeview"
+        s = ttk.Style()
+        s.configure(uid,
+                    background=COLORS["surface"],
+                    fieldbackground=COLORS["surface"],
+                    foreground=COLORS["text"],
+                    rowheight=30,
+                    borderwidth=0,
+                    font=FONT_MONO_SM)
+        s.configure(f"{uid}.Heading",
+                    background=COLORS["surface2"],
+                    foreground=COLORS["text_muted"],
+                    font=("Segoe UI", 8, "bold"),
+                    relief="flat", borderwidth=0)
+        s.map(uid,
+              background=[("selected", COLORS["accent3"])],
+              foreground=[("selected", COLORS["accent_bright"])])
+        s.layout(uid, [("Treeview.treearea", {"sticky": "nswe"})])
+
+        self.tree = ttk.Treeview(self, style=uid, columns=columns,
+                                 show="headings", height=height)
+        anchors = anchors or ["w"] * len(columns)
+        for col, head, w, anch in zip(columns, headings, widths, anchors):
+            self.tree.heading(col, text=head.upper(), anchor="center")
+            self.tree.column(col, width=w, anchor=anch, stretch=False)
+
+        vsb = tk.Scrollbar(self, orient="vertical", command=self.tree.yview,
+                           bg=COLORS["surface2"], troughcolor=COLORS["surface"],
+                           activebackground=COLORS["accent"], relief="flat", width=6)
+        self.tree.configure(yscrollcommand=vsb.set)
+        vsb.pack(side="right", fill="y")
+        self.tree.pack(side="left", fill="both", expand=True)
+
+        # Tag styles
+        self.tree.tag_configure("profit",  foreground=COLORS["green"])
+        self.tree.tag_configure("loss",    foreground=COLORS["red"])
+        self.tree.tag_configure("neutral", foreground=COLORS["text_dim"])
+        self.tree.tag_configure("best",    background="#041c2e", foreground=COLORS["accent"])
+        self.tree.tag_configure("odd",     background=COLORS["surface2"])
+        self.tree.tag_configure("even",    background=COLORS["surface"])
+
+    def clear(self):
+        for item in self.tree.get_children(): self.tree.delete(item)
+
+    def insert(self, values, tags=()):
+        n = len(self.tree.get_children())
+        row_tag = "odd" if n % 2 else "even"
+        final_tags = tuple(tags) + (row_tag,)
+        self.tree.insert("", "end", values=values, tags=final_tags)
+
+    def bind(self, seq, func): self.tree.bind(seq, func)
+
+
+def scrollable_frame(parent):
+    canvas = tk.Canvas(parent, bg=COLORS["bg"], bd=0, highlightthickness=0)
+    vsb = tk.Scrollbar(parent, orient="vertical", command=canvas.yview,
+                       bg=COLORS["surface2"], troughcolor=COLORS["bg"],
+                       activebackground=COLORS["accent"], relief="flat", width=6)
+    canvas.configure(yscrollcommand=vsb.set)
+    inner = tk.Frame(canvas, bg=COLORS["bg"])
+    win = canvas.create_window((0, 0), window=inner, anchor="nw")
+    def _cfg(e):
+        canvas.configure(scrollregion=canvas.bbox("all"))
+        canvas.itemconfig(win, width=canvas.winfo_width())
+    inner.bind("<Configure>", _cfg)
+    vsb.pack(side="right", fill="y")
+    canvas.pack(side="left", fill="both", expand=True)
+    canvas.bind("<MouseWheel>", lambda e: canvas.yview_scroll(-1*(e.delta//120), "units"))
+    return inner
+
+
+# ==========================
+# SIDEBAR NAV
+# ==========================
+
+class Sidebar(tk.Frame):
+    def __init__(self, parent, on_navigate, **kwargs):
+        super().__init__(parent, bg=COLORS["surface"], width=SIDEBAR_W, **kwargs)
+        self.pack_propagate(False)
+        self.on_navigate = on_navigate
+        self._active = None
+        self._buttons = {}
+        self._build()
+
+    def _build(self):
+        # Logo area with canvas-drawn accent
+        logo_canvas = tk.Canvas(self, width=SIDEBAR_W, height=80, bd=0,
+                                highlightthickness=0, bg=COLORS["surface"])
+        logo_canvas.pack(fill="x")
+        # Cyan accent strip
+        logo_canvas.create_rectangle(0, 0, SIDEBAR_W, 2, fill=COLORS["accent"], outline="")
+        # Glow behind logo text
+        logo_canvas.create_rectangle(14, 18, SIDEBAR_W-14, 62,
+                                     fill=COLORS["accent_glow"], outline=COLORS["border"], width=1)
+        logo_canvas.create_text(SIDEBAR_W//2, 34, text="◈  HFT ARB",
+                                font=("Segoe UI", 13, "bold"), fill=COLORS["accent"], anchor="center")
+        logo_canvas.create_text(SIDEBAR_W//2, 52, text="Crypto Arbitrage System",
+                                font=FONT_MICRO, fill=COLORS["text_muted"], anchor="center")
+
+        # Divider
+        tk.Frame(self, bg=COLORS["border"], height=1).pack(fill="x")
+
+        # Network badge
+        badge_frame = tk.Frame(self, bg=COLORS["surface"], pady=10, padx=16)
+        badge_frame.pack(fill="x")
+        badge = tk.Frame(badge_frame, bg=COLORS["green_dim"],
+                         highlightthickness=1, highlightbackground=COLORS["green"])
+        badge.pack(fill="x")
+        tk.Label(badge, text="● TESTNET  CONNECTED", font=FONT_MICRO,
+                 fg=COLORS["green"], bg=COLORS["green_dim"], pady=4).pack()
+
+        # Section label
+        tk.Label(self, text="  NAVIGATION", font=FONT_MICRO,
+                 fg=COLORS["text_muted"], bg=COLORS["surface"],
+                 anchor="w").pack(fill="x", pady=(10, 4))
+
+        nav_items = [
+            ("scanner", "⬡", "Scanner",        "Buscar oportunidades"),
+            ("config",  "⚙", "Configuración",  "API y parámetros"),
+            ("stats",   "▲", "Estadísticas",   "Historial y análisis"),
+            ("exec",    "⚡","Ejecución",       "Trading en vivo"),
+        ]
+
+        nav_frame = tk.Frame(self, bg=COLORS["surface"])
+        nav_frame.pack(fill="x", padx=8)
+
+        for key, icon, label, hint in nav_items:
+            btn = self._nav_btn(nav_frame, key, icon, label, hint)
+            btn.pack(fill="x", pady=2)
+            self._buttons[key] = btn
+
+        # Spacer
+        tk.Frame(self, bg=COLORS["surface"]).pack(fill="both", expand=True)
+
+        # Bottom section label
+        tk.Label(self, text="  SYSTEM", font=FONT_MICRO,
+                 fg=COLORS["text_muted"], bg=COLORS["surface"],
+                 anchor="w").pack(fill="x", pady=(0, 4))
+
+        # Hotkeys quick reference
+        ref = tk.Frame(self, bg=COLORS["surface2"], padx=12, pady=10)
+        ref.pack(fill="x")
+        for shortcut, action in [("F5", "Escanear"), ("Ctrl+S", "Guardar"), ("Esc", "Stop auto")]:
+            row = tk.Frame(ref, bg=COLORS["surface2"])
+            row.pack(fill="x", pady=1)
+            tk.Label(row, text=shortcut, font=FONT_MICRO, fg=COLORS["accent"],
+                     bg=COLORS["surface2"], width=8, anchor="w").pack(side="left")
+            tk.Label(row, text=action, font=FONT_MICRO, fg=COLORS["text_muted"],
+                     bg=COLORS["surface2"], anchor="w").pack(side="left")
+
+        # Footer
+        footer = tk.Frame(self, bg=COLORS["bg"], pady=8, padx=12)
+        footer.pack(fill="x", side="bottom")
+        tk.Label(footer, text="v2.1 · Python 3.10+", font=FONT_MICRO,
+                 fg=COLORS["text_muted"], bg=COLORS["bg"]).pack(anchor="w")
+
+        self.select("scanner")
+
+    def _nav_btn(self, parent, key, icon, label, hint=""):
+        outer = tk.Frame(parent, bg=COLORS["surface"], cursor="hand2")
+        # Left indicator bar (initially hidden)
+        indicator = tk.Frame(outer, bg=COLORS["surface"], width=3)
+        indicator.pack(side="left", fill="y")
+        # Main content
+        inner = tk.Frame(outer, bg=COLORS["surface"], padx=8, pady=10)
+        inner.pack(side="left", fill="x", expand=True)
+        icon_lbl = tk.Label(inner, text=icon, font=("Segoe UI", 11), bg=COLORS["surface"],
+                            fg=COLORS["text_muted"], width=2, anchor="center")
+        icon_lbl.pack(side="left", padx=(0, 8))
+        text_frame = tk.Frame(inner, bg=COLORS["surface"])
+        text_frame.pack(side="left", fill="x", expand=True)
+        name_lbl = tk.Label(text_frame, text=label, font=("Segoe UI", 9, "bold"),
+                            bg=COLORS["surface"], fg=COLORS["text_dim"], anchor="w")
+        name_lbl.pack(anchor="w")
+        hint_lbl = tk.Label(text_frame, text=hint, font=FONT_MICRO,
+                            bg=COLORS["surface"], fg=COLORS["text_muted"], anchor="w")
+        hint_lbl.pack(anchor="w")
+
+        outer._indicator = indicator
+        outer._icon = icon_lbl
+        outer._name = name_lbl
+        outer._hint = hint_lbl
+        outer._inner = inner
+        outer._text_frame = text_frame
+
+        all_widgets = [outer, inner, icon_lbl, text_frame, name_lbl, hint_lbl]
+
+        def on_click(e=None):
+            self.select(key)
+            self.on_navigate(key)
+
+        def on_enter(e=None):
+            if key != self._active:
+                for w in all_widgets:
+                    w.configure(bg=COLORS["surface2"])
+
+        def on_leave(e=None):
+            if key != self._active:
+                for w in all_widgets:
+                    w.configure(bg=COLORS["surface"])
+
+        for w in all_widgets:
+            w.bind("<Button-1>", on_click)
+            w.bind("<Enter>", on_enter)
+            w.bind("<Leave>", on_leave)
+
+        return outer
+
+    def select(self, key):
+        # Deactivate old
+        if self._active and self._active in self._buttons:
+            old = self._buttons[self._active]
+            bg = COLORS["surface"]
+            for w in [old, old._inner, old._icon, old._name, old._hint, old._text_frame]:
+                w.configure(bg=bg)
+            old._indicator.configure(bg=bg)
+            old._name.configure(fg=COLORS["text_dim"], font=("Segoe UI", 9, "bold"))
+            old._icon.configure(fg=COLORS["text_muted"])
+        self._active = key
+        if key in self._buttons:
+            btn = self._buttons[key]
+            bg = COLORS["surface3"]
+            for w in [btn, btn._inner, btn._icon, btn._name, btn._hint, btn._text_frame]:
+                w.configure(bg=bg)
+            btn._indicator.configure(bg=COLORS["accent"])
+            btn._name.configure(fg=COLORS["accent_bright"], font=("Segoe UI", 9, "bold"))
+            btn._icon.configure(fg=COLORS["accent"])
+
+
+# ==========================
+# STATUS BAR
+# ==========================
+
+class StatusBar(tk.Frame):
+    def __init__(self, parent, **kwargs):
+        super().__init__(parent, bg=COLORS["surface"], height=28, **kwargs)
+        self.pack_propagate(False)
+        # Left accent line
+        tk.Frame(self, bg=COLORS["border"], width=1).pack(side="left", fill="y")
+        # Pulse dot
+        self._dot = tk.Label(self, text="◉", font=("Segoe UI", 9), fg=COLORS["text_muted"],
+                             bg=COLORS["surface"])
+        self._dot.pack(side="left", padx=(10, 5))
+        # Status text
+        self._status = tk.Label(self, text="Sistema listo", font=FONT_SMALL,
+                                fg=COLORS["text_dim"], bg=COLORS["surface"], anchor="w")
+        self._status.pack(side="left", fill="x", expand=True)
+        # Right section: market badge + clock
+        right = tk.Frame(self, bg=COLORS["surface"])
+        right.pack(side="right", padx=12)
+        self._market_badge = tk.Label(right, text="SPOT · TESTNET", font=FONT_MICRO,
+                                      fg=COLORS["accent"], bg=COLORS["accent_glow"],
+                                      padx=6, pady=2)
+        self._market_badge.pack(side="left", padx=(0, 12))
+        self._time = tk.Label(right, text="", font=FONT_MONO_SM,
+                              fg=COLORS["text_muted"], bg=COLORS["surface"])
+        self._time.pack(side="left")
+        # Top border
+        tk.Frame(self, bg=COLORS["border"], height=1).pack(side="top", fill="x")
+        self._pulse_state = False
+        self._update_clock()
+
+    def _update_clock(self):
+        self._time.configure(text=datetime.now().strftime("%H:%M:%S"))
+        self.after(1000, self._update_clock)
+
+    def set(self, msg: str, level: str = "info"):
+        self._status.configure(text=f"  {msg}")
+        color_map = {
+            "info":       COLORS["text_dim"],
+            "success":    COLORS["green"],
+            "error":      COLORS["red"],
+            "warn":       COLORS["yellow"],
+            "processing": COLORS["accent"],
+        }
+        dot_map = {
+            "info":       COLORS["text_muted"],
+            "success":    COLORS["green"],
+            "error":      COLORS["red"],
+            "warn":       COLORS["yellow"],
+            "processing": COLORS["accent"],
+        }
+        self._status.configure(fg=color_map.get(level, COLORS["text_dim"]))
+        self._dot.configure(fg=dot_map.get(level, COLORS["text_muted"]))
+
+    def start_pulse(self):
+        self._pulse_state = True
+        self._pulse()
+
+    def stop_pulse(self):
+        self._pulse_state = False
+        self._dot.configure(fg=COLORS["text_muted"])
+
+    def _pulse(self):
+        if not self._pulse_state:
+            return
+        cur = self._dot.cget("fg")
+        self._dot.configure(fg=COLORS["accent"] if cur != COLORS["accent"] else COLORS["bg"])
+        self.after(300, self._pulse)
+
+
+# ==========================
+# TOAST
+# ==========================
+
+class Toast:
+    def __init__(self, root):
+        self.root = root
+        self._current: Optional[tk.Toplevel] = None
+
+    def show(self, message: str, level: str = "info"):
+        if self._current and self._current.winfo_exists():
+            self._current.destroy()
+        accent = {
+            "info":    COLORS["accent"],
+            "success": COLORS["green"],
+            "error":   COLORS["red"],
+            "warn":    COLORS["yellow"],
+        }.get(level, COLORS["accent"])
+        bg_dim = {
+            "info":    COLORS["accent_glow"],
+            "success": COLORS["green_glow"],
+            "error":   COLORS["red_glow"],
+            "warn":    COLORS["yellow_dim"],
+        }.get(level, COLORS["accent_glow"])
+
+        tw = tk.Toplevel(self.root)
+        tw.overrideredirect(True)
+        tw.attributes("-topmost", True)
+        tw.attributes("-alpha", 0.97)
+        x = self.root.winfo_rootx() + self.root.winfo_width() - 350
+        y = self.root.winfo_rooty() + 50
+        tw.geometry(f"340x52+{x}+{y}")
+        tw.configure(bg=COLORS["surface2"])
+        # Top border glow
+        tk.Frame(tw, bg=accent, height=2).pack(fill="x", side="top")
+        body = tk.Frame(tw, bg=COLORS["surface2"])
+        body.pack(fill="both", expand=True)
+        # Left color bar
+        tk.Frame(body, bg=accent, width=4).pack(side="left", fill="y")
+        # Icon
+        icons = {"info": "◆", "success": "✓", "error": "✗", "warn": "⚠"}
+        tk.Label(body, text=icons.get(level, "◆"), font=("Segoe UI", 11), fg=accent,
+                 bg=COLORS["surface2"], padx=10).pack(side="left")
+        tk.Label(body, text=message, bg=COLORS["surface2"], fg=COLORS["text"],
+                 font=FONT_SMALL, anchor="w").pack(side="left", fill="x", expand=True)
+        self._current = tw
+        self.root.after(2600, lambda: tw.destroy() if tw.winfo_exists() else None)
+
+
+# ==========================
+# PAGES
+# ==========================
+
+class PageScanner(tk.Frame):
+    def __init__(self, parent, app, **kwargs):
+        super().__init__(parent, bg=COLORS["bg"], **kwargs)
+        self.app = app
+        self._build()
+
+    def _build(self):
+        # ── Top header bar ──────────────────────────────────────────
+        hdr = tk.Frame(self, bg=COLORS["surface"], pady=0)
+        hdr.pack(fill="x")
+        # Accent top line
+        tk.Frame(hdr, bg=COLORS["accent"], height=2).pack(fill="x")
+        hdr_inner = tk.Frame(hdr, bg=COLORS["surface"], padx=20, pady=12)
+        hdr_inner.pack(fill="x")
+
+        # Title block
+        title_block = tk.Frame(hdr_inner, bg=COLORS["surface"])
+        title_block.pack(side="left")
+        tk.Label(title_block, text="Arbitrage Scanner", font=FONT_HEADING,
+                 fg=COLORS["text_bright"], bg=COLORS["surface"]).pack(anchor="w")
+        tk.Label(title_block, text="Triangular USDT · Binance Real-time",
+                 font=FONT_SMALL, fg=COLORS["text_muted"], bg=COLORS["surface"]).pack(anchor="w")
+
+        # Action buttons
+        btn_row = tk.Frame(hdr_inner, bg=COLORS["surface"])
+        btn_row.pack(side="right")
+        b_scan = GlowButton(btn_row, "Escanear", command=self.app._scan_once,
+                            style="primary", width=130, icon="⬡")
+        b_scan.pack(side="left", padx=3)
+        b_on = GlowButton(btn_row, "Auto ON", command=self.app._start_autoscan,
+                          style="success", width=100, icon="▶")
+        b_on.pack(side="left", padx=3)
+        b_off = GlowButton(btn_row, "Auto OFF", command=self.app._stop_autoscan,
+                           style="ghost", width=100, icon="■")
+        b_off.pack(side="left", padx=3)
+        b_clr = GlowButton(btn_row, "Limpiar", command=self.app._clear_scan_results,
+                           style="ghost", width=90, icon="✕")
+        b_clr.pack(side="left", padx=3)
+        self.app._controls_disable_on_busy += [b_scan, b_on]
+
+        # ── Scan progress bar ────────────────────────────────────────
+        prog_frame = tk.Frame(self, bg=COLORS["bg"])
+        prog_frame.pack(fill="x")
+        self.progress = ttk.Progressbar(prog_frame, mode="indeterminate")
+        s = ttk.Style()
+        s.configure("Scan.Horizontal.TProgressbar",
+                    troughcolor=COLORS["surface2"], background=COLORS["accent"],
+                    thickness=3, borderwidth=0)
+        self.progress.configure(style="Scan.Horizontal.TProgressbar")
+        self.progress.pack(fill="x")
+
+        # ── KPI row ──────────────────────────────────────────────────
+        kpi_bg = tk.Frame(self, bg=COLORS["bg"], padx=16, pady=12)
+        kpi_bg.pack(fill="x")
+        kpi_data = [
+            ("Tiempo de Scan",    self.app.kpi_scan_ms,           "ms",  COLORS["accent"]),
+            ("Tasa de Éxito",     self.app.kpi_success,           "",    COLORS["green"]),
+            ("Mejor Oportunidad", self.app.kpi_best,              "%",   COLORS["yellow"]),
+            ("Promedio",          self.app.kpi_avg,               "%",   COLORS["text_dim"]),
+            ("Rutas Limpias",     self.app.kpi_vars["opportunities"], "", COLORS["purple"]),
+        ]
+        for title, var, unit, color in kpi_data:
+            card = KPICard(kpi_bg, title, var, unit, accent_color=color, width=175, height=86)
+            card.pack(side="left", padx=(0, 10), pady=2)
+
+        # ── Filter toolbar ───────────────────────────────────────────
+        toolbar = tk.Frame(self, bg=COLORS["surface2"], padx=16, pady=8)
+        toolbar.pack(fill="x", padx=16, pady=(0, 10))
+        tk.Label(toolbar, text="⬡", font=("Segoe UI", 10), fg=COLORS["accent"],
+                 bg=COLORS["surface2"]).pack(side="left", padx=(0, 6))
+        tk.Label(toolbar, text="Filtrar:", font=FONT_SMALL, fg=COLORS["text_muted"],
+                 bg=COLORS["surface2"]).pack(side="left")
+        StyledEntry(toolbar, textvariable=self.app.search_var, width=26).pack(side="left", padx=8)
+        tk.Frame(toolbar, bg=COLORS["border"], width=1).pack(side="left", fill="y", padx=8)
+        tk.Label(toolbar, text="Auto-scan (s):", font=FONT_SMALL, fg=COLORS["text_muted"],
+                 bg=COLORS["surface2"]).pack(side="left")
+        StyledEntry(toolbar, textvariable=self.app.autoscan_interval_var, width=5).pack(side="left", padx=6)
+        self.app.search_var.trace_add("write", lambda *_: self.app._apply_filter())
+
+        # Scan counter badge
+        self._scan_lbl = tk.Label(toolbar, text="Esperando primer scan...",
+                                  font=FONT_MICRO, fg=COLORS["text_muted"], bg=COLORS["surface2"])
+        self._scan_lbl.pack(side="right")
+
+        # ── Results table ────────────────────────────────────────────
+        tbl_wrap = tk.Frame(self, bg=COLORS["bg"], padx=16, pady=0)
+        tbl_wrap.pack(fill="both", expand=True, pady=(0, 10))
+
+        # Table header label
+        lbl_row = tk.Frame(tbl_wrap, bg=COLORS["bg"], pady=4)
+        lbl_row.pack(fill="x")
+        tk.Label(lbl_row, text="OPORTUNIDADES ENCONTRADAS", font=FONT_MICRO,
+                 fg=COLORS["accent"], bg=COLORS["bg"]).pack(side="left")
+
+        cols    = ("rank", "path", "symbols", "net_profit", "fees", "gross_final", "net_final", "profit_pct")
+        heads   = ("#",    "Ruta de Arbitraje", "Símbolos", "Ganancia Neta", "Comisiones", "Bruto Final", "Neto Final", "% Profit")
+        widths  = [44,     240,                  220,        110,             95,            110,           110,          100]
+        anchors = ["center","w",                 "w",        "e",             "e",           "e",           "e",          "e"]
+        self.app.tree = StyledTreeview(tbl_wrap, cols, heads, widths, anchors, height=19)
+        self.app.tree.pack(fill="both", expand=True)
+        self.app.tree.bind("<<TreeviewSelect>>", self.app._on_row_select)
+
+    def set_busy(self, busy: bool):
+        if busy: self.progress.start(6)
+        else:    self.progress.stop()
+
+
+class PageConfig(tk.Frame):
+    def __init__(self, parent, app, **kwargs):
+        super().__init__(parent, bg=COLORS["bg"], **kwargs)
+        self.app = app
+        self._build()
+
+    def _build(self):
+        # Header
+        hdr = tk.Frame(self, bg=COLORS["surface"], pady=0)
+        hdr.pack(fill="x")
+        tk.Frame(hdr, bg=COLORS["yellow"], height=2).pack(fill="x")
+        hdr_inner = tk.Frame(hdr, bg=COLORS["surface"], padx=20, pady=12)
+        hdr_inner.pack(fill="x")
+        title_block = tk.Frame(hdr_inner, bg=COLORS["surface"])
+        title_block.pack(side="left")
+        tk.Label(title_block, text="Configuración del Sistema", font=FONT_HEADING,
+                 fg=COLORS["text_bright"], bg=COLORS["surface"]).pack(anchor="w")
+        tk.Label(title_block, text="API · Mercado · Compuesto · Señal IA",
+                 font=FONT_SMALL, fg=COLORS["text_muted"], bg=COLORS["surface"]).pack(anchor="w")
+        btn_row = tk.Frame(hdr_inner, bg=COLORS["surface"])
+        btn_row.pack(side="right")
+        GlowButton(btn_row, "Guardar", command=self.app._save_config,
+                   style="warn", width=120, icon="💾").pack(side="left", padx=3)
+        GlowButton(btn_row, "Validar API", command=self.app._validate_keys,
+                   style="success", width=120, icon="🔗").pack(side="left", padx=3)
+        GlowButton(btn_row, "Copiar", command=self.app._copy_config,
+                   style="ghost", width=90, icon="📋").pack(side="left", padx=3)
+
+        scroll_area = scrollable_frame(self)
+
+        def section_hdr(parent, title, color=COLORS["accent"], description=""):
+            f = tk.Frame(parent, bg=COLORS["bg"], padx=20, pady=16)
+            f.pack(fill="x")
+            hf = tk.Frame(f, bg=COLORS["bg"])
+            hf.pack(fill="x")
+            # Color pill
+            pill = tk.Frame(hf, bg=color, width=4)
+            pill.pack(side="left", fill="y", padx=(0, 10))
+            tb = tk.Frame(hf, bg=COLORS["bg"])
+            tb.pack(side="left")
+            tk.Label(tb, text=title, font=FONT_SUBHEADING, fg=COLORS["text_bright"],
+                     bg=COLORS["bg"]).pack(anchor="w")
+            if description:
+                tk.Label(tb, text=description, font=FONT_MICRO, fg=COLORS["text_muted"],
+                         bg=COLORS["bg"]).pack(anchor="w")
+            tk.Frame(f, bg=color, height=1).pack(fill="x", pady=(8, 0))
+            return f
+
+        def field_grid(parent, items, cols=2):
+            """Render a 2-col grid of labeled fields."""
+            body = tk.Frame(parent, bg=COLORS["bg"], padx=20)
+            body.pack(fill="x", pady=4)
+            for i, (lbl, wclass, *args) in enumerate(items):
+                col_i = i % cols
+                row_i = i // cols
+                if col_i == 0:
+                    row_frame = tk.Frame(body, bg=COLORS["bg"])
+                    row_frame.pack(fill="x", pady=5)
+                cell = tk.Frame(row_frame, bg=COLORS["bg"])
+                cell.pack(side="left", fill="x", expand=True, padx=(0 if col_i == 0 else 12, 0))
+                tk.Label(cell, text=lbl, font=FONT_LABEL, fg=COLORS["text_dim"],
+                         bg=COLORS["bg"], anchor="w").pack(fill="x", pady=(0, 3))
+                if wclass:
+                    w = wclass(cell, *args)
+                    w.pack(fill="x")
+
+        # ── API Section ──────────────────────────────────────────────
+        section_hdr(scroll_area, "Credenciales API",
+                    COLORS["accent"], "Clave y secreto de Binance")
+        api_body = tk.Frame(scroll_area, bg=COLORS["bg"], padx=20)
+        api_body.pack(fill="x", pady=4)
+        r0 = tk.Frame(api_body, bg=COLORS["bg"])
+        r0.pack(fill="x", pady=5)
+        c0 = tk.Frame(r0, bg=COLORS["bg"])
+        c0.pack(fill="x", expand=True)
+        tk.Label(c0, text="API Key", font=FONT_LABEL, fg=COLORS["text_dim"],
+                 bg=COLORS["bg"], anchor="w").pack(fill="x", pady=(0, 3))
+        StyledEntry(c0, textvariable=self.app.api_key_var).pack(fill="x")
+
+        r1 = tk.Frame(api_body, bg=COLORS["bg"])
+        r1.pack(fill="x", pady=5)
+        c1 = tk.Frame(r1, bg=COLORS["bg"])
+        c1.pack(fill="x", expand=True)
+        tk.Label(c1, text="API Secret", font=FONT_LABEL, fg=COLORS["text_dim"],
+                 bg=COLORS["bg"], anchor="w").pack(fill="x", pady=(0, 3))
+        ent_s = StyledEntry(c1, textvariable=self.app.api_secret_var, show="*")
+        ent_s.pack(fill="x")
+        self.app.api_secret_entry = ent_s
+
+        pref_row = tk.Frame(api_body, bg=COLORS["bg"])
+        pref_row.pack(fill="x", pady=(8, 4))
+        for txt, var, cmd in [
+            ("Guardar claves en disco", self.app.save_keys_var, None),
+            ("Mostrar secreto",         self.app.show_secret_var, self.app._toggle_secret_visibility),
+        ]:
+            chk = tk.Checkbutton(pref_row, text=txt, variable=var, command=cmd,
+                                 bg=COLORS["bg"], fg=COLORS["text_dim"], font=FONT_SMALL,
+                                 activebackground=COLORS["bg"], activeforeground=COLORS["accent"],
+                                 selectcolor=COLORS["surface3"], cursor="hand2",
+                                 highlightthickness=0)
+            chk.pack(side="left", padx=(0, 20))
+        GlowButton(pref_row, "Limpiar claves", command=self.app._clear_keys,
+                   style="danger", width=120, height=30).pack(side="right")
+
+        # ── Market Params ────────────────────────────────────────────
+        section_hdr(scroll_area, "Parámetros de Mercado",
+                    COLORS["green"], "Capital · Fees · Filtros")
+        field_grid(scroll_area, [
+            ("Capital Inicial (USDT)", StyledEntry, self.app.usdt_var),
+            ("Fee por Trade",          StyledEntry, self.app.fee_var),
+            ("Max Assets",             StyledEntry, self.app.max_assets_var),
+            ("Ganancia Mínima Limpia", StyledEntry, self.app.min_clean_profit_var),
+            ("Tipo de Mercado",        StyledCombobox, self.app.market_var, ("spot", "perpetual")),
+            ("Red",                    StyledCombobox, self.app.network_var, ("mainnet", "testnet")),
+        ])
+
+        # ── Compound ─────────────────────────────────────────────────
+        section_hdr(scroll_area, "Interés Compuesto",
+                    COLORS["yellow"], "Simulación de ciclos acumulativos")
+        field_grid(scroll_area, [
+            ("Ciclos",                   StyledEntry, self.app.compound_cycles_var),
+            ("Trigger (×capital)",       StyledEntry, self.app.compound_trigger_multiple_var),
+            ("Stake post-trigger (%)",   StyledEntry, self.app.compound_stake_pct_var),
+        ], cols=3)
+
+        # ── AI Signal ────────────────────────────────────────────────
+        section_hdr(scroll_area, "Señal IA", COLORS["purple"], "Motor de análisis técnico")
+        field_grid(scroll_area, [
+            ("Símbolo Binance",  StyledEntry, self.app.binance_symbol_var),
+            ("Cantidad (USDT)",  StyledEntry, self.app.binance_qty_var),
+            ("Intervalo",        StyledEntry, self.app.binance_interval_var),
+            ("Limit (velas)",    StyledEntry, self.app.binance_limit_var),
+        ])
+        chk_body = tk.Frame(scroll_area, bg=COLORS["bg"], padx=20, pady=8)
+        chk_body.pack(fill="x")
+        for txt, var in [
+            ("Binance Testnet",        self.app.binance_testnet_var),
+            ("Ejecución operativa",    self.app.binance_execute_var),
+        ]:
+            chk = tk.Checkbutton(chk_body, text=txt, variable=var,
+                                 bg=COLORS["bg"], fg=COLORS["text_dim"], font=FONT_SMALL,
+                                 activebackground=COLORS["bg"], activeforeground=COLORS["purple"],
+                                 selectcolor=COLORS["purple_dim"], cursor="hand2",
+                                 highlightthickness=0)
+            chk.pack(side="left", padx=(0, 24))
+
+        # Bottom padding
+        tk.Frame(scroll_area, bg=COLORS["bg"], height=20).pack()
+
+
+class PageStats(tk.Frame):
+    def __init__(self, parent, app, **kwargs):
+        super().__init__(parent, bg=COLORS["bg"], **kwargs)
+        self.app = app
+        self._build()
+
+    def _build(self):
+        hdr = tk.Frame(self, bg=COLORS["surface"])
+        hdr.pack(fill="x")
+        tk.Frame(hdr, bg=COLORS["green"], height=2).pack(fill="x")
+        hdr_inner = tk.Frame(hdr, bg=COLORS["surface"], padx=20, pady=12)
+        hdr_inner.pack(fill="x")
+        title_block = tk.Frame(hdr_inner, bg=COLORS["surface"])
+        title_block.pack(side="left")
+        tk.Label(title_block, text="Estadísticas & Historial", font=FONT_HEADING,
+                 fg=COLORS["text_bright"], bg=COLORS["surface"]).pack(anchor="w")
+        tk.Label(title_block, text="Historial de scans y simulación compuesta",
+                 font=FONT_SMALL, fg=COLORS["text_muted"], bg=COLORS["surface"]).pack(anchor="w")
+        btn_row = tk.Frame(hdr_inner, bg=COLORS["surface"])
+        btn_row.pack(side="right")
+        GlowButton(btn_row, "Limpiar historial", command=self.app._clear_history,
+                   style="ghost", width=140).pack(side="left", padx=3)
+        GlowButton(btn_row, "Limpiar detalle", command=self.app._clear_detail,
+                   style="ghost", width=130).pack(side="left", padx=3)
+
+        main = tk.Frame(self, bg=COLORS["bg"])
+        main.pack(fill="both", expand=True, padx=16, pady=12)
+        main.columnconfigure(0, weight=1)
+        main.rowconfigure(1, weight=1)
+        main.rowconfigure(4, weight=1)
+
+        tk.Label(main, text="HISTORIAL DE ESCANEOS", font=FONT_MICRO, fg=COLORS["accent"],
+                 bg=COLORS["bg"], anchor="w").grid(row=0, column=0, sticky="w", pady=(0, 5))
+
+        cols   = ("timestamp", "market", "network", "valid", "clean", "success", "best", "ms")
+        heads  = ("Timestamp", "Mercado", "Red", "Válidas", "Limpias", "% Éxito", "Mejor %", "Ms")
+        widths = [155, 80, 80, 65, 70, 80, 90, 65]
+        anchors= ["w", "center", "center", "center", "center", "center", "center", "center"]
+        self.app.hist_tree = StyledTreeview(main, cols, heads, widths, anchors, height=9)
+        self.app.hist_tree.grid(row=1, column=0, sticky="nsew", pady=(0, 12))
+
+        # Cycle slider bar
+        ctrl = tk.Frame(main, bg=COLORS["surface2"], padx=14, pady=10,
+                        highlightthickness=1, highlightbackground=COLORS["border"])
+        ctrl.grid(row=2, column=0, sticky="ew", pady=(0, 12))
+        tk.Label(ctrl, text="Ciclos compuesto:", font=FONT_LABEL, fg=COLORS["text_dim"],
+                 bg=COLORS["surface2"]).pack(side="left")
+        s = ttk.Style()
+        s.configure("Dark.Horizontal.TScale", background=COLORS["surface2"],
+                    troughcolor=COLORS["surface3"])
+        self.app.cycle_slider = ttk.Scale(ctrl, from_=10, to=300, orient="horizontal",
+                                          command=self.app._on_slider,
+                                          style="Dark.Horizontal.TScale")
+        self.app.cycle_slider.set(50)
+        self.app.cycle_slider.pack(side="left", fill="x", expand=True, padx=12)
+        self.app.compound_cycles_var.trace_add("write", lambda *_: None)
+
+        tk.Label(main, text="DETALLE DE RUTA + GRÁFICO ASCII", font=FONT_MICRO, fg=COLORS["green"],
+                 bg=COLORS["bg"], anchor="w").grid(row=3, column=0, sticky="w", pady=(0, 5))
+
+        detail_frame = tk.Frame(main, bg=COLORS["surface"],
+                                highlightthickness=1, highlightbackground=COLORS["border"])
+        detail_frame.grid(row=4, column=0, sticky="nsew")
+        vsb = tk.Scrollbar(detail_frame, orient="vertical",
+                           bg=COLORS["surface2"], troughcolor=COLORS["surface"],
+                           activebackground=COLORS["accent"], relief="flat", width=6)
+        self.app.detail_text = tk.Text(detail_frame, bg=COLORS["surface"], fg=COLORS["text"],
+                                       insertbackground=COLORS["accent"], relief="flat", bd=0,
+                                       font=FONT_MONO_SM, wrap="word", padx=14, pady=10,
+                                       highlightthickness=0, yscrollcommand=vsb.set,
+                                       spacing1=2, spacing3=2)
+        vsb.configure(command=self.app.detail_text.yview)
+        vsb.pack(side="right", fill="y")
+        self.app.detail_text.pack(side="left", fill="both", expand=True)
+
+
+class PageExec(tk.Frame):
+    def __init__(self, parent, app, **kwargs):
+        super().__init__(parent, bg=COLORS["bg"], **kwargs)
+        self.app = app
+        self._build()
+
+    def _build(self):
+        hdr = tk.Frame(self, bg=COLORS["surface"])
+        hdr.pack(fill="x")
+        tk.Frame(hdr, bg=COLORS["purple"], height=2).pack(fill="x")
+        hdr_inner = tk.Frame(hdr, bg=COLORS["surface"], padx=20, pady=12)
+        hdr_inner.pack(fill="x")
+        title_block = tk.Frame(hdr_inner, bg=COLORS["surface"])
+        title_block.pack(side="left")
+        tk.Label(title_block, text="Ejecucion Unificada", font=FONT_HEADING,
+                 fg=COLORS["text_bright"], bg=COLORS["surface"]).pack(anchor="w")
+        tk.Label(title_block, text="IA - Arbitraje - Ordenes en tiempo real",
+                 font=FONT_SMALL, fg=COLORS["text_muted"], bg=COLORS["surface"]).pack(anchor="w")
+        btn_row = tk.Frame(hdr_inner, bg=COLORS["surface"])
+        btn_row.pack(side="right")
+        self.app.btn_ai = GlowButton(btn_row, "Analizar IA", command=self.app._run_binance_ai,
+                                      style="purple", width=130, icon="O")
+        self.app.btn_ai.pack(side="left", padx=3)
+        self.app.btn_market = GlowButton(btn_row, "Orden Mercado", command=self.app._run_direct_market_order,
+                                          style="warn", width=140, icon="!")
+        self.app.btn_market.pack(side="left", padx=3)
+        GlowButton(btn_row, "Limpiar log", command=self.app._clear_exec_log,
+                   style="ghost", width=110).pack(side="left", padx=3)
+        GlowButton(btn_row, "Limpiar tabla", command=self.app._clear_trades,
+                   style="ghost", width=110).pack(side="left", padx=3)
+        self.app._controls_disable_on_busy += [self.app.btn_ai, self.app.btn_market]
+
+        kpi_row = tk.Frame(self, bg=COLORS["bg"], padx=16, pady=10)
+        kpi_row.pack(fill="x")
+        for title, var, unit, color in [
+            ("Trades Ejecutados", self.app.kpi_exec_trades, "", COLORS["accent"]),
+            ("Tasa de Exito",     self.app.kpi_exec_success, "", COLORS["green"]),
+            ("Ganancia Total",    self.app.kpi_exec_profit, "USDT", COLORS["yellow"]),
+        ]:
+            KPICard(kpi_row, title, var, unit, accent_color=color, width=190, height=86).pack(
+                side="left", padx=(0, 10), pady=2)
+
+        body = tk.Frame(self, bg=COLORS["bg"])
+        body.pack(fill="both", expand=True, padx=16, pady=(0, 10))
+        body.columnconfigure(0, weight=1)
+        body.rowconfigure(1, weight=1)
+        body.rowconfigure(3, weight=1)
+
+        tk.Label(body, text="ACTIVITY LOG", font=FONT_MICRO, fg=COLORS["purple"],
+                 bg=COLORS["bg"], anchor="w").grid(row=0, column=0, sticky="w", pady=(0, 4))
+        self.app.activity_log = ActivityLog(body)
+        self.app.activity_log.grid(row=1, column=0, sticky="nsew", pady=(0, 10))
+
+        tbl_hdr = tk.Frame(body, bg=COLORS["bg"])
+        tbl_hdr.grid(row=2, column=0, sticky="ew", pady=(0, 5))
+        tk.Label(tbl_hdr, text="TRADES EJECUTADOS", font=FONT_MICRO, fg=COLORS["accent"],
+                 bg=COLORS["bg"]).pack(side="left")
+        tk.Frame(tbl_hdr, bg=COLORS["border"], width=1).pack(side="left", fill="y", padx=16)
+        tk.Label(tbl_hdr, text="GANANCIAS ACUMULADAS", font=FONT_MICRO, fg=COLORS["green"],
+                 bg=COLORS["bg"]).pack(side="left")
+
+        tables = tk.Frame(body, bg=COLORS["bg"])
+        tables.grid(row=3, column=0, sticky="nsew")
+        tables.columnconfigure(0, weight=3)
+        tables.columnconfigure(1, weight=2)
+        tables.rowconfigure(0, weight=1)
+
+        tcols   = ("timestamp", "symbol", "signal", "best_path", "net_profit", "mode", "status")
+        theads  = ("Timestamp", "Simbolo", "Senal", "Mejor Ruta", "Ganancia", "Modo", "Estado")
+        twidths = [130, 68, 58, 195, 82, 82, 90]
+        t_anch  = ["w", "center", "center", "w", "e", "center", "center"]
+        self.app.trade_tree = StyledTreeview(tables, tcols, theads, twidths, t_anch, height=7)
+        self.app.trade_tree.grid(row=0, column=0, sticky="nsew", padx=(0, 6))
+
+        pcols   = ("timestamp", "symbol", "net_profit", "cumulative_profit", "status")
+        pheads  = ("Timestamp", "Simbolo", "Ganancia", "Acumulado", "Estado")
+        pwidths = [130, 76, 88, 108, 95]
+        p_anch  = ["w", "center", "e", "e", "center"]
+        self.app.profit_tree = StyledTreeview(tables, pcols, pheads, pwidths, p_anch, height=7)
+        self.app.profit_tree.grid(row=0, column=1, sticky="nsew", padx=(6, 0))
+
+
+# ==========================
+# MAIN APP
+# ==========================
 
 class ArbitrageApp:
     def __init__(self, root: tk.Tk):
         self.root = root
-        self.root.title("🚀 HFTCryptoArbitrage | Sistema Unificado")
-        self.root.geometry("1600x900")
-        self.root.minsize(1200, 700)
+        self.root.title("HFT Crypto Arbitrage — Sistema Unificado")
+        self.root.geometry("1440x860")
+        self.root.minsize(1100, 640)
+        self.root.configure(bg=COLORS["bg"])
 
-        self.theme = {
-            "bg": "#f8f9fa", "fg": "#212529",
-            "primary": "#0d6efd", "success": "#198754",
-            "warning": "#ffc107", "danger": "#dc3545",
-            "card_bg": "#ffffff", "border": "#dee2e6",
-            "profit": "#198754", "loss": "#dc3545", "neutral": "#6c757d"
-        }
-
-        self.dark_mode = tk.BooleanVar(value=False)
         self.scanner = BinanceArbitrageScanner()
         self.ai_engine = AISignalEngine()
-
         self.running = False
         self.scan_history: List[tuple] = []
         self.executed_trades: List[tuple] = []
         self.last_output: Optional[ScanOutput] = None
         self.all_scan_rows: List[ArbitrageResult] = []
-        self.toast_window: Optional[tk.Toplevel] = None
-        self._pulse_on = False
+        self._busy = False
+        self._controls_disable_on_busy: List = []
 
         self._init_variables()
-
-        self._setup_style()
-        self._build_main_layout()
+        self._build_ui()
         self._setup_keyboard_shortcuts()
         self._load_config()
-        self._update_status("Sistema listo • Conectado a Binance Testnet", "info")
-
+        self.statusbar.set("Sistema listo · Conectado a Binance Testnet", "info")
 
     def _init_variables(self):
-        """Inicializa variables de control con defaults robustos."""
         self.api_key_var = tk.StringVar()
         self.api_secret_var = tk.StringVar()
         self.market_var = tk.StringVar(value="spot")
@@ -436,26 +1493,26 @@ class ArbitrageApp:
         self.max_assets_var = tk.StringVar(value="120")
         self.min_clean_profit_var = tk.StringVar(value="0.01")
         self.min_profit_var = self.min_clean_profit_var
-
         self.compound_cycles_var = tk.StringVar(value="50")
         self.compound_trigger_multiple_var = tk.StringVar(value="2.0")
         self.compound_stake_pct_var = tk.StringVar(value="0.10")
-
         self.binance_symbol_var = tk.StringVar(value="BTCUSDT")
         self.binance_qty_var = tk.StringVar(value="100.00")
         self.binance_interval_var = tk.StringVar(value="1m")
         self.binance_limit_var = tk.StringVar(value="300")
         self.binance_testnet_var = tk.BooleanVar(value=True)
         self.binance_execute_var = tk.BooleanVar(value=False)
-
+        self.autoscan_interval_var = tk.StringVar(value="5")
+        self.save_keys_var = tk.BooleanVar(value=False)
+        self.show_secret_var = tk.BooleanVar(value=False)
         self.search_var = tk.StringVar(value="")
-        self.status_var = tk.StringVar(value="Listo")
-        self.status_type_var = tk.StringVar(value="info")
-        self.kpi_scan_ms = tk.StringVar(value="0 ms")
-        self.kpi_success = tk.StringVar(value="0.00%")
-        self.kpi_best = tk.StringVar(value="0.0000%")
-        self.kpi_avg = tk.StringVar(value="0.0000%")
-        # Compatibilidad: algunos flujos esperan diccionario de KPIs
+        self.kpi_scan_ms = tk.StringVar(value="—")
+        self.kpi_success = tk.StringVar(value="—")
+        self.kpi_best = tk.StringVar(value="—")
+        self.kpi_avg = tk.StringVar(value="—")
+        self.kpi_exec_trades = tk.StringVar(value="0")
+        self.kpi_exec_success = tk.StringVar(value="—")
+        self.kpi_exec_profit = tk.StringVar(value="0.000000")
         self.kpi_vars = {
             "scan_time": self.kpi_scan_ms,
             "success_rate": self.kpi_success,
@@ -464,421 +1521,75 @@ class ArbitrageApp:
             "opportunities": tk.StringVar(value="0"),
         }
 
-    def _build_main_layout(self):
-        self._build_ui()
+    def _build_ui(self):
+        self.root.columnconfigure(1, weight=1)
+        self.root.rowconfigure(0, weight=1)
+        self.root.rowconfigure(1, weight=0)
+
+        self.sidebar = Sidebar(self.root, self._navigate)
+        self.sidebar.grid(row=0, column=0, sticky="ns")
+
+        # Vertical divider
+        tk.Frame(self.root, bg=COLORS["border"], width=1).grid(row=0, column=0, sticky="nse")
+
+        self.content = tk.Frame(self.root, bg=COLORS["bg"])
+        self.content.grid(row=0, column=1, sticky="nsew")
+        self.content.rowconfigure(0, weight=1)
+        self.content.columnconfigure(0, weight=1)
+
+        self.pages: Dict[str, tk.Frame] = {}
+        for key, cls in [("scanner", PageScanner), ("config", PageConfig),
+                          ("stats", PageStats), ("exec", PageExec)]:
+            page = cls(self.content, self)
+            page.grid(row=0, column=0, sticky="nsew")
+            self.pages[key] = page
+
+        self.statusbar = StatusBar(self.root)
+        self.statusbar.grid(row=1, column=0, columnspan=2, sticky="ew")
+
+        self.toast = Toast(self.root)
+        self._navigate("scanner")
+
+    def _navigate(self, key: str):
+        self.sidebar.select(key)
+        for k, page in self.pages.items():
+            if k == key:
+                page.tkraise()
 
     def _setup_keyboard_shortcuts(self):
-        self._bind_shortcuts()
-
-    def _setup_style(self):
-        self.style = ttk.Style()
-        if "clam" in self.style.theme_names():
-            self.style.theme_use("clam")
-        self._apply_theme()
-
-    def _apply_theme(self):
-        dark = self.dark_mode.get()
-        bg = "#111827" if dark else "#f3f4f6"
-        fg = "#e5e7eb" if dark else "#111827"
-        card = "#1f2937" if dark else "#ffffff"
-
-        self.root.configure(bg=bg)
-        self.style.configure("TFrame", background=bg)
-        self.style.configure("TLabel", background=bg, foreground=fg, font=("Segoe UI", 10))
-        self.style.configure("TCheckbutton", background=bg, foreground=fg)
-        self.style.configure("TNotebook", background=bg)
-        self.style.configure("TNotebook.Tab", padding=(16, 10), font=("Segoe UI", 10, "bold"))
-        self.style.configure("TButton", font=("Segoe UI", 9, "bold"), padding=6)
-        self.style.configure("Primary.TButton", foreground="#ffffff")
-        self.style.configure("Success.TButton", foreground="#ffffff")
-        self.style.configure("Card.TFrame", background=card, relief="solid", borderwidth=1)
-        self.style.configure("CardTitle.TLabel", background=card, foreground=fg, font=("Segoe UI", 9))
-        self.style.configure("CardValue.TLabel", background=card, foreground="#10b981" if dark else "#047857", font=("Segoe UI", 14, "bold"))
-        self.style.configure("Status.TLabel", background=bg, foreground="#3b82f6", font=("Segoe UI", 10, "bold"))
-
-    def _build_ui(self):
-        self.root.columnconfigure(0, weight=1)
-        self.root.rowconfigure(2, weight=1)
-
-        self._build_menu_bar()
-
-        header = ttk.Frame(self.root, style="Card.TFrame", padding=10)
-        header.grid(row=1, column=0, sticky="ew", padx=8, pady=(8, 4))
-        left = ttk.Frame(header)
-        left.pack(side="left")
-        ttk.Label(left, text="🚀 HFTCryptoArbitrage", font=("Segoe UI", 14, "bold")).pack(anchor="w")
-        ttk.Label(left, text="Sistema Unificado de Arbitraje Binance", font=("Segoe UI", 9)).pack(anchor="w")
-
-        right = ttk.Frame(header)
-        right.pack(side="right")
-        ttk.Checkbutton(right, text="Tema oscuro", variable=self.dark_mode, command=self._apply_theme).pack(side="right", padx=4)
-
-        notebook = ttk.Notebook(self.root)
-        notebook.grid(row=2, column=0, sticky="nsew", padx=8, pady=4)
-
-        self.tab_config = ttk.Frame(notebook, padding=12)
-        self.tab_scan = ttk.Frame(notebook, padding=12)
-        self.tab_stats = ttk.Frame(notebook, padding=12)
-        self.tab_exec = ttk.Frame(notebook, padding=12)
-
-        notebook.add(self.tab_config, text="⚙️ Configuración")
-        notebook.add(self.tab_scan, text="🔍 Scanner")
-        notebook.add(self.tab_stats, text="📈 Estadísticas")
-        notebook.add(self.tab_exec, text="🚀 Ejecución Unificada")
-
-        self._build_tab_config()
-        self._build_tab_scan()
-        self._build_tab_stats()
-        self._build_tab_exec()
-
-        self._build_statusbar()
-
-    def _build_menu_bar(self):
-        menubar = tk.Menu(self.root)
-
-        file_menu = tk.Menu(menubar, tearoff=0)
-        file_menu.add_command(label="Guardar configuración", command=self._save_config, accelerator="Ctrl+S")
-        file_menu.add_separator()
-        file_menu.add_command(label="Salir", command=self.root.quit)
-        menubar.add_cascade(label="Archivo", menu=file_menu)
-
-        scan_menu = tk.Menu(menubar, tearoff=0)
-        scan_menu.add_command(label="Escanear ahora", command=self._scan_once, accelerator="F5")
-        scan_menu.add_command(label="Auto-scan ON", command=self._start_autoscan)
-        scan_menu.add_command(label="Auto-scan OFF", command=self._stop_autoscan, accelerator="Esc")
-        scan_menu.add_separator()
-        scan_menu.add_command(label="Flujo unificado", command=self._run_unified_flow)
-        menubar.add_cascade(label="Scanner", menu=scan_menu)
-
-        help_menu = tk.Menu(menubar, tearoff=0)
-        help_menu.add_command(label="Ayuda", command=self._show_help)
-        menubar.add_cascade(label="Ayuda", menu=help_menu)
-
-        self.root.config(menu=menubar)
-
-    def _build_statusbar(self):
-        status = ttk.Frame(self.root)
-        status.grid(row=3, column=0, sticky="ew", padx=8, pady=(2, 8))
-        self.dot = tk.Label(status, text="●", fg="#6b7280")
-        self.dot.pack(side="left", padx=(0, 6))
-        ttk.Label(status, textvariable=self.status_var, style="Status.TLabel").pack(side="left")
-        ttk.Label(status, text="v1.2.0 • Python 3.10+", font=("Segoe UI", 8), foreground=self.theme["neutral"]).pack(side="right")
-        self._update_connection_indicator("disconnected")
-
-    def _build_config_tab(self):
-        self._build_tab_config()
-
-    def _build_scanner_tab(self):
-        self._build_tab_scan()
-
-    def _build_stats_tab(self):
-        self._build_tab_stats()
-
-    def _build_execution_tab(self):
-        self._build_tab_exec()
-
-    def _build_tab_config(self):
-        f = self.tab_config
-        f.columnconfigure(1, weight=1)
-
-        api = ttk.LabelFrame(f, text="API")
-        api.grid(row=0, column=0, columnspan=2, sticky="ew", pady=6)
-        api.columnconfigure(1, weight=1)
-        ttk.Label(api, text="API Key").grid(row=0, column=0, sticky="w", padx=6, pady=4)
-        e_key = ttk.Entry(api, textvariable=self.api_key_var)
-        e_key.grid(row=0, column=1, sticky="ew", padx=6, pady=4)
-        ToolTip(e_key, "Clave API Binance")
-
-        ttk.Label(api, text="API Secret").grid(row=1, column=0, sticky="w", padx=6, pady=4)
-        e_secret = ttk.Entry(api, textvariable=self.api_secret_var, show="*")
-        e_secret.grid(row=1, column=1, sticky="ew", padx=6, pady=4)
-        ToolTip(e_secret, "Secreto API Binance")
-
-        params = ttk.LabelFrame(f, text="Parámetros")
-        params.grid(row=1, column=0, columnspan=2, sticky="ew", pady=6)
-        params.columnconfigure(1, weight=1)
-
-        rows = [
-            ("Capital inicial USDT", self.usdt_var),
-            ("Fee por trade", self.fee_var),
-            ("Max assets", self.max_assets_var),
-            ("Ganancia limpia mínima", self.min_clean_profit_var),
-        ]
-        for i, (lbl, var) in enumerate(rows):
-            ttk.Label(params, text=lbl).grid(row=i, column=0, sticky="w", padx=6, pady=4)
-            ent = ttk.Entry(params, textvariable=var)
-            ent.grid(row=i, column=1, sticky="ew", padx=6, pady=4)
-            ToolTip(ent, f"Configurar {lbl}")
-
-        ttk.Label(params, text="Mercado").grid(row=4, column=0, sticky="w", padx=6, pady=4)
-        cb_market = ttk.Combobox(params, textvariable=self.market_var, values=["spot", "perpetual"], state="readonly")
-        cb_market.grid(row=4, column=1, sticky="ew", padx=6, pady=4)
-
-        ttk.Label(params, text="Red").grid(row=5, column=0, sticky="w", padx=6, pady=4)
-        cb_network = ttk.Combobox(params, textvariable=self.network_var, values=["mainnet", "testnet"], state="readonly")
-        cb_network.grid(row=5, column=1, sticky="ew", padx=6, pady=4)
-        ToolTip(cb_network, "Usa testnet para pruebas")
-
-        comp = ttk.LabelFrame(f, text="Interés compuesto")
-        comp.grid(row=2, column=0, columnspan=2, sticky="ew", pady=6)
-        comp.columnconfigure(1, weight=1)
-
-        c_rows = [
-            ("Ciclos", self.compound_cycles_var),
-            ("Trigger x capital", self.compound_trigger_multiple_var),
-            ("Stake post-trigger", self.compound_stake_pct_var),
-        ]
-        for i, (lbl, var) in enumerate(c_rows):
-            ttk.Label(comp, text=lbl).grid(row=i, column=0, sticky="w", padx=6, pady=4)
-            ttk.Entry(comp, textvariable=var).grid(row=i, column=1, sticky="ew", padx=6, pady=4)
-
-        buttons = ttk.Frame(f)
-        buttons.grid(row=3, column=0, columnspan=2, sticky="w", pady=8)
-        ttk.Button(buttons, text="Guardar configuración", command=self._save_config).pack(side="left", padx=4)
-        ttk.Button(buttons, text="Validar conectividad API", command=self._validate_keys).pack(side="left", padx=4)
-
-    def _build_tab_scan(self):
-        f = self.tab_scan
-        f.columnconfigure(0, weight=1)
-        f.rowconfigure(3, weight=1)
-
-        ctrl = ttk.Frame(f)
-        ctrl.grid(row=0, column=0, sticky="ew")
-        ttk.Button(ctrl, text="Escanear ahora", style="Primary.TButton", command=self._scan_once).pack(side="left", padx=4)
-        ttk.Button(ctrl, text="Auto-scan ON", style="Success.TButton", command=self._start_autoscan).pack(side="left", padx=4)
-        ttk.Button(ctrl, text="Auto-scan OFF", command=self._stop_autoscan).pack(side="left", padx=4)
-
-        ttk.Label(ctrl, text="Filtro rápido:").pack(side="left", padx=(20, 6))
-        s_entry = ttk.Entry(ctrl, textvariable=self.search_var, width=24)
-        s_entry.pack(side="left")
-        self.search_var.trace_add("write", lambda *_: self._apply_filter())
-        ToolTip(s_entry, "Filtra por símbolo o ruta")
-
-        self.progress = ttk.Progressbar(f, mode="indeterminate")
-        self.progress.grid(row=1, column=0, sticky="ew", pady=4)
-
-        kpis = ttk.Frame(f)
-        kpis.grid(row=2, column=0, sticky="ew", pady=6)
-        self._kpi_card(kpis, "Tiempo scan", self.kpi_scan_ms).pack(side="left", padx=4)
-        self._kpi_card(kpis, "Tasa éxito", self.kpi_success).pack(side="left", padx=4)
-        self._kpi_card(kpis, "Mejor %", self.kpi_best).pack(side="left", padx=4)
-        self._kpi_card(kpis, "Promedio %", self.kpi_avg).pack(side="left", padx=4)
-
-        cols = ("rank", "path", "symbols", "net_profit", "fees", "gross_final", "net_final", "profit_pct")
-        self.tree = ttk.Treeview(f, columns=cols, show="headings", height=17)
-        widths = {"rank": 55, "path": 260, "symbols": 250, "net_profit": 110, "fees": 100, "gross_final": 110, "net_final": 110, "profit_pct": 100}
-        for c in cols:
-            self.tree.heading(c, text=c)
-            anchor = "e" if c in {"net_profit", "fees", "gross_final", "net_final", "profit_pct"} else "w"
-            self.tree.column(c, width=widths[c], anchor=anchor)
-        self.tree.grid(row=3, column=0, sticky="nsew")
-        self.tree.bind("<<TreeviewSelect>>", self._on_row_select)
-        self.tree.tag_configure("profit", foreground=self.theme["profit"])
-        self.tree.tag_configure("loss", foreground=self.theme["loss"])
-        self.tree.tag_configure("best", background="#dbeafe")
-
-    def _build_tab_stats(self):
-        f = self.tab_stats
-        f.columnconfigure(0, weight=1)
-        f.rowconfigure(1, weight=1)
-
-        ttk.Label(f, text="Historial de escaneos", font=("Segoe UI", 11, "bold")).grid(row=0, column=0, sticky="w")
-        cols = ("timestamp", "market", "network", "valid", "clean", "success", "best", "ms")
-        self.hist_tree = ttk.Treeview(f, columns=cols, show="headings", height=8)
-        widths = {"timestamp": 165, "market": 90, "network": 90, "valid": 80, "clean": 80, "success": 95, "best": 95, "ms": 80}
-        for c in cols:
-            self.hist_tree.heading(c, text=c)
-            self.hist_tree.column(c, width=widths[c], anchor="center")
-        self.hist_tree.grid(row=1, column=0, sticky="nsew")
-
-        controls = ttk.Frame(f)
-        controls.grid(row=2, column=0, sticky="ew", pady=(8, 2))
-        ttk.Label(controls, text="Ciclos (slider):").pack(side="left")
-        self.cycle_slider = ttk.Scale(controls, from_=10, to=300, orient="horizontal", command=self._on_slider)
-        self.cycle_slider.set(50)
-        self.cycle_slider.pack(side="left", fill="x", expand=True, padx=8)
-
-        ttk.Label(f, text="Detalle + gráfico ASCII", font=("Segoe UI", 11, "bold")).grid(row=3, column=0, sticky="w", pady=(6, 2))
-        self.detail_text = tk.Text(f, height=12, wrap="word", font=("Consolas", 10))
-        self.detail_text.grid(row=4, column=0, sticky="nsew")
-
-    def _build_tab_exec(self):
-        f = self.tab_exec
-        f.columnconfigure(1, weight=1)
-        f.rowconfigure(8, weight=1)
-        f.rowconfigure(11, weight=1)
-
-        ttk.Label(f, text="Binance Symbol").grid(row=0, column=0, sticky="w", pady=4)
-        ttk.Entry(f, textvariable=self.binance_symbol_var).grid(row=0, column=1, sticky="ew", pady=4)
-        ttk.Label(f, text="Qty (USDT)").grid(row=1, column=0, sticky="w", pady=4)
-        ttk.Entry(f, textvariable=self.binance_qty_var).grid(row=1, column=1, sticky="ew", pady=4)
-        ttk.Label(f, text="Interval").grid(row=2, column=0, sticky="w", pady=4)
-        ttk.Entry(f, textvariable=self.binance_interval_var).grid(row=2, column=1, sticky="ew", pady=4)
-        ttk.Label(f, text="Limit candles").grid(row=3, column=0, sticky="w", pady=4)
-        ttk.Entry(f, textvariable=self.binance_limit_var).grid(row=3, column=1, sticky="ew", pady=4)
-
-        ttk.Checkbutton(f, text="Binance Testnet", variable=self.binance_testnet_var).grid(row=4, column=0, sticky="w", pady=4)
-        ttk.Checkbutton(f, text="Marcar ejecución operativa", variable=self.binance_execute_var).grid(row=4, column=1, sticky="w", pady=4)
-
-        flow = ttk.Frame(f)
-        flow.grid(row=5, column=0, columnspan=2, sticky="w", pady=8)
-        ttk.Button(flow, text="Analizar IA Binance", command=self._run_binance_ai).pack(side="left", padx=4)
-        ttk.Button(flow, text="Ejecutar flujo unificado", command=self._run_unified_flow).pack(side="left", padx=4)
-
-        self.execution_text = tk.Text(f, height=10, wrap="word", font=("Consolas", 10))
-        self.execution_text.grid(row=8, column=0, columnspan=2, sticky="nsew", pady=6)
-        self.execution_text.tag_configure("INFO", foreground="#2563eb")
-        self.execution_text.tag_configure("WARN", foreground="#d97706")
-        self.execution_text.tag_configure("ERROR", foreground="#dc2626")
-
-        ttk.Label(f, text="Traders ejecutados", font=("Segoe UI", 10, "bold")).grid(row=9, column=0, columnspan=2, sticky="w")
-        cols = ("timestamp", "symbol", "signal", "best_path", "net_profit", "mode", "status")
-        self.trade_tree = ttk.Treeview(f, columns=cols, show="headings", height=7)
-        tw = {"timestamp": 165, "symbol": 90, "signal": 70, "best_path": 320, "net_profit": 100, "mode": 95, "status": 300}
-        for c in cols:
-            self.trade_tree.heading(c, text=c)
-            self.trade_tree.column(c, width=tw[c], anchor="center")
-        self.trade_tree.grid(row=11, column=0, columnspan=2, sticky="nsew", pady=4)
-
-    def _focus_filter(self):
-        try:
-            self.root.focus_get()
-        except Exception:
-            pass
-
-    def _bind_shortcuts(self):
-        self.root.bind_all("<Control-s>", lambda _e: self._save_config())
-        self.root.bind_all("<F5>", lambda _e: self._scan_once())
-        self.root.bind_all("<Escape>", lambda _e: self._stop_autoscan())
-
-    def _kpi_card(self, parent, title: str, var: tk.StringVar):
-        card = ttk.Frame(parent, style="Card.TFrame", padding=8)
-        ttk.Label(card, text=title, style="CardTitle.TLabel").pack(anchor="w")
-        ttk.Label(card, textvariable=var, style="CardValue.TLabel").pack(anchor="w")
-        return card
+        self.root.bind_all("<Control-s>", lambda _: self._save_config())
+        self.root.bind_all("<F5>", lambda _: self._scan_once())
+        self.root.bind_all("<Escape>", lambda _: self._stop_autoscan())
 
     def _set_busy(self, busy: bool):
-        self._pulse_on = busy
+        self._busy = busy
         if busy:
-            self.progress.start(10)
-            self._update_status("Procesando operación...", "processing")
-            self._pulse_dot()
+            self.statusbar.start_pulse()
+            self.statusbar.set("Procesando...", "processing")
+            scanner_page = self.pages.get("scanner")
+            if scanner_page:
+                scanner_page.set_busy(True)
         else:
-            self.progress.stop()
-            self._update_status("Listo", "info")
+            self.statusbar.stop_pulse()
+            scanner_page = self.pages.get("scanner")
+            if scanner_page:
+                scanner_page.set_busy(False)
+        for w in self._controls_disable_on_busy:
+            try:
+                w.configure(state="disabled" if busy else "normal")
+            except Exception:
+                pass
 
-    def _pulse_dot(self):
-        if not self._pulse_on:
-            return
-        current = self.dot.cget("fg")
-        self.dot.configure(fg="#10b981" if current != "#10b981" else "#6b7280")
-        self.root.after(400, self._pulse_dot)
-
-    def _toast(self, message: str):
-        if self.toast_window:
-            self.toast_window.destroy()
-        tw = tk.Toplevel(self.root)
-        tw.overrideredirect(True)
-        tw.attributes("-topmost", True)
-        x = self.root.winfo_rootx() + self.root.winfo_width() - 320
-        y = self.root.winfo_rooty() + 60
-        tw.geometry(f"300x40+{x}+{y}")
-        tk.Label(tw, text=message, bg="#1f2937", fg="white").pack(fill="both", expand=True)
-        self.toast_window = tw
-        self.root.after(2200, lambda: tw.destroy() if tw.winfo_exists() else None)
-
-    def _update_connection_indicator(self, state: str):
-        if not hasattr(self, "dot"):
-            return
-        cmap = {"connected": "#198754", "disconnected": "#6c757d", "error": "#dc3545", "processing": "#ffc107", "info": "#0d6efd"}
-        self.dot.configure(fg=cmap.get(state, "#6c757d"))
-
-    def _update_status(self, message: str, level: str = "info"):
-        self.status_var.set(message)
-        self.status_type_var.set(level)
-        if "error" in level.lower():
-            self._update_connection_indicator("error")
-        elif "success" in level.lower() or "ok" in message.lower():
-            self._update_connection_indicator("connected")
-        elif "processing" in level.lower():
-            self._update_connection_indicator("processing")
-        else:
-            self._update_connection_indicator("info")
-
-    def _show_help(self):
-        messagebox.showinfo("Ayuda", "Atajos: Ctrl+S Guardar | F5 Escanear | Esc Detener AutoScan")
-
-    def _copy_config(self):
-        data = {
-            "market": self.market_var.get(),
-            "network": self.network_var.get(),
-            "usdt": self.usdt_var.get(),
-            "fee": self.fee_var.get(),
-            "max_assets": self.max_assets_var.get(),
-        }
-        self.root.clipboard_clear()
-        self.root.clipboard_append(json.dumps(data, ensure_ascii=False, indent=2))
-        self._toast("Configuración copiada")
-
-    def _save_config(self):
-        payload = {
-            "api_key": self.api_key_var.get().strip(),
-            "api_secret": self.api_secret_var.get().strip(),
-            "market": self.market_var.get().strip(),
-            "network": self.network_var.get().strip(),
-            "usdt": self.usdt_var.get().strip(),
-            "fee": self.fee_var.get().strip(),
-            "max_assets": self.max_assets_var.get().strip(),
-            "min_clean_profit": self.min_clean_profit_var.get().strip(),
-            "compound_cycles": self.compound_cycles_var.get().strip(),
-            "compound_trigger_multiple": self.compound_trigger_multiple_var.get().strip(),
-            "compound_stake_pct": self.compound_stake_pct_var.get().strip(),
-            "binance_symbol": self.binance_symbol_var.get().strip(),
-            "binance_qty": self.binance_qty_var.get().strip(),
-            "binance_interval": self.binance_interval_var.get().strip(),
-            "binance_limit": self.binance_limit_var.get().strip(),
-            "binance_testnet": self.binance_testnet_var.get(),
-            "binance_execute": self.binance_execute_var.get(),
-            "dark_mode": self.dark_mode.get(),
-        }
-        CONFIG_PATH.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-        self.status_var.set("Configuración guardada")
-        self._toast("Configuración guardada")
-
-    def _load_config(self):
-        if not CONFIG_PATH.exists():
-            return
-        try:
-            payload = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
-            self.api_key_var.set(payload.get("api_key", ""))
-            self.api_secret_var.set(payload.get("api_secret", ""))
-            self.market_var.set(payload.get("market", "spot"))
-            self.network_var.set(payload.get("network", "testnet"))
-            self.usdt_var.set(payload.get("usdt", "10"))
-            self.fee_var.set(payload.get("fee", "0.001"))
-            self.max_assets_var.set(payload.get("max_assets", "120"))
-            self.min_clean_profit_var.set(payload.get("min_clean_profit", "0.0001"))
-            self.compound_cycles_var.set(payload.get("compound_cycles", "50"))
-            self.compound_trigger_multiple_var.set(payload.get("compound_trigger_multiple", "2.0"))
-            self.compound_stake_pct_var.set(payload.get("compound_stake_pct", "0.10"))
-            self.binance_symbol_var.set(payload.get("binance_symbol", "BTCUSDT"))
-            self.binance_qty_var.set(payload.get("binance_qty", "10"))
-            self.binance_interval_var.set(payload.get("binance_interval", "1m"))
-            self.binance_limit_var.set(payload.get("binance_limit", "300"))
-            self.binance_testnet_var.set(bool(payload.get("binance_testnet", True)))
-            self.binance_execute_var.set(bool(payload.get("binance_execute", False)))
-            self.dark_mode.set(bool(payload.get("dark_mode", False)))
-            self._apply_theme()
-            self.status_var.set("Configuración cargada")
-        except Exception as exc:  # noqa: BLE001
-            self.status_var.set(f"No se pudo cargar configuración: {exc}")
+    def _log_exec(self, line: str, level: str = "INFO"):
+        if hasattr(self, "activity_log"):
+            self.activity_log.log(line, level)
 
     @staticmethod
     def _to_positive_float(raw: str, field: str) -> float:
         try:
             v = float(raw)
         except ValueError as exc:
-            raise ValueError(f"{field} debe ser numérico. Ejemplo válido: 10.5") from exc
+            raise ValueError(f"{field} debe ser numérico.") from exc
         if v <= 0:
             raise ValueError(f"{field} debe ser > 0")
         return v
@@ -888,31 +1599,46 @@ class ArbitrageApp:
         try:
             v = int(raw)
         except ValueError as exc:
-            raise ValueError(f"{field} debe ser entero. Ejemplo válido: 120") from exc
+            raise ValueError(f"{field} debe ser entero.") from exc
         if v <= 0:
             raise ValueError(f"{field} debe ser > 0")
+        return v
+
+    @staticmethod
+    def _to_non_negative_float(raw: str, field: str) -> float:
+        try:
+            v = float(raw)
+        except ValueError as exc:
+            raise ValueError(f"{field} debe ser numérico.") from exc
+        if v < 0:
+            raise ValueError(f"{field} debe ser >= 0")
         return v
 
     def _configure_scanner(self):
         self.scanner.configure(
             market_type=self.market_var.get().strip(),
             testnet=self.network_var.get().strip() == "testnet",
-            fee_rate=float(self.fee_var.get()),
+            fee_rate=self._to_non_negative_float(self.fee_var.get(), "Fee"),
         )
 
     def _validate_keys(self):
         try:
             self._configure_scanner()
-            ok, msg = self.scanner.validate_api_keys(self.api_key_var.get().strip(), self.api_secret_var.get().strip())
-            self.status_var.set(msg)
+            ok, msg = self.scanner.validate_api_keys(
+                self.api_key_var.get().strip(), self.api_secret_var.get().strip()
+            )
+            self.statusbar.set(msg, "success" if ok else "warn")
             if ok:
                 messagebox.showinfo("Validación", msg)
+                self.toast.show(msg, "success")
             else:
                 messagebox.showwarning("Validación", msg)
-        except Exception as exc:  # noqa: BLE001
-            self.status_var.set(f"Error validando: {exc}")
+        except Exception as exc:
+            self.statusbar.set(f"Error: {exc}", "error")
 
     def _scan_once(self):
+        if self._busy:
+            return
         threading.Thread(target=self._scan_worker, daemon=True).start()
 
     def _scan_worker(self):
@@ -921,13 +1647,18 @@ class ArbitrageApp:
             self._configure_scanner()
             start_usdt = self._to_positive_float(self.usdt_var.get(), "Capital")
             max_assets = self._to_positive_int(self.max_assets_var.get(), "Max assets")
-            min_clean = float(self.min_clean_profit_var.get())
-            output = self.scanner.scan(start_usdt=start_usdt, max_paths=40, max_assets=max_assets, min_clean_profit_usdt=min_clean)
+            min_clean = self._to_non_negative_float(self.min_clean_profit_var.get(), "Ganancia mínima")
+            output = self.scanner.scan(start_usdt=start_usdt, max_paths=40,
+                                       max_assets=max_assets, min_clean_profit_usdt=min_clean)
             self.root.after(0, lambda: self._render_output(output))
-            self.root.after(0, lambda: self.status_var.set(f"Scan completado: {len(output.opportunities)} rutas limpias"))
-        except Exception as exc:  # noqa: BLE001
-            self.root.after(0, lambda: self.status_var.set(f"Error en scan: {exc}"))
-            self.root.after(0, lambda: self._log_exec(f"ERROR | Scan | {exc}", "ERROR"))
+            self.root.after(0, lambda: self.statusbar.set(
+                f"Scan completado · {len(output.opportunities)} rutas limpias encontradas", "success"))
+            self.root.after(0, lambda: self._log_exec(
+                f"Scan OK — {output.stats.valid_paths} válidas, {output.stats.clean_profitable_paths} limpias, "
+                f"{output.stats.scan_ms}ms", "OK"))
+        except Exception as exc:
+            self.root.after(0, lambda: self.statusbar.set(f"Error en scan: {exc}", "error"))
+            self.root.after(0, lambda: self._log_exec(f"Scan fallido: {exc}", "ERROR"))
         finally:
             self.root.after(0, lambda: self._set_busy(False))
 
@@ -935,30 +1666,25 @@ class ArbitrageApp:
         self.last_output = output
         self.all_scan_rows = list(output.opportunities)
         self._apply_filter()
-
-        self.kpi_scan_ms.set(f"{output.stats.scan_ms} ms")
+        self.kpi_scan_ms.set(f"{output.stats.scan_ms}")
         self.kpi_success.set(f"{output.stats.success_rate_pct:.2f}%")
         self.kpi_best.set(f"{output.stats.best_profit_pct:.4f}%")
         self.kpi_avg.set(f"{output.stats.avg_profit_pct:.4f}%")
         self.kpi_vars["opportunities"].set(str(len(output.opportunities)))
         self._append_history(output)
-
         if output.opportunities:
-            self._toast(f"Mejor oportunidad: {output.opportunities[0].profit_pct:.4f}%")
+            self.toast.show(f"Mejor: {output.opportunities[0].profit_pct:.4f}%", "success")
 
     def _apply_filter(self):
         q = self.search_var.get().strip().lower()
-        for item in self.tree.get_children():
-            self.tree.delete(item)
-
+        self.tree.clear()
         rows = self.all_scan_rows
         if q:
             rows = [r for r in rows if q in " ".join(r.path).lower() or q in " ".join(r.symbols).lower()]
-
         for i, row in enumerate(rows, start=1):
             values = (
                 i,
-                " -> ".join(row.path),
+                " → ".join(row.path),
                 " / ".join(row.symbols),
                 f"{row.net_profit_usdt:.6f}",
                 f"{row.total_fees_usdt:.6f}",
@@ -970,28 +1696,23 @@ class ArbitrageApp:
             tags.append("profit" if row.net_profit_usdt >= 0 else "loss")
             if i == 1:
                 tags.append("best")
-            self.tree.insert("", "end", values=values, tags=tuple(tags))
+            self.tree.insert(values=values, tags=tuple(tags))
 
     def _append_history(self, output: ScanOutput):
         ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
         row = (
-            ts,
-            output.stats.market_type,
+            ts, output.stats.market_type,
             "testnet" if output.stats.testnet else "mainnet",
-            output.stats.valid_paths,
-            output.stats.clean_profitable_paths,
+            output.stats.valid_paths, output.stats.clean_profitable_paths,
             f"{output.stats.success_rate_pct:.2f}%",
             f"{output.stats.best_profit_pct:.4f}%",
             output.stats.scan_ms,
         )
         self.scan_history.append(row)
         self.scan_history = self.scan_history[-300:]
-
-        for item in self.hist_tree.get_children():
-            self.hist_tree.delete(item)
+        self.hist_tree.clear()
         for item in self.scan_history[-100:]:
-            self.hist_tree.insert("", "end", values=item)
-
+            self.hist_tree.insert(values=item)
         self._render_ascii_chart()
 
     def _render_ascii_chart(self):
@@ -1000,17 +1721,20 @@ class ArbitrageApp:
         bests = []
         for r in self.scan_history[-20:]:
             bests.append(float(str(r[6]).replace("%", "")))
-
         max_abs = max([abs(x) for x in bests] + [1.0])
-        chart_lines = ["ASCII Profit Chart (últimos 20 scans):"]
+        chart_lines = ["  ASCII Profit Chart (últimos 20 scans):", "  " + "─" * 38]
         for v in bests:
-            n = int((abs(v) / max_abs) * 20)
-            bar = ("+" * n) if v >= 0 else ("-" * n)
-            chart_lines.append(f"{v:>8.4f}% | {bar}")
-
+            n = int((abs(v) / max_abs) * 24)
+            bar = ("█" * n) if v >= 0 else ("░" * n)
+            prefix = "+" if v >= 0 else "-"
+            chart_lines.append(f"  {prefix}{abs(v):>7.4f}%  │ {bar}")
         existing = self.detail_text.get("1.0", tk.END)
-        if "ASCII Profit Chart" not in existing:
-            self.detail_text.insert("end", "\n" + "\n".join(chart_lines) + "\n")
+        if "ASCII Profit Chart" in existing:
+            base = existing.split("ASCII Profit Chart")[0].rstrip()
+            self.detail_text.delete("1.0", tk.END)
+            if base:
+                self.detail_text.insert("1.0", base + "\n\n")
+        self.detail_text.insert("end", "\n" + "\n".join(chart_lines) + "\n")
 
     def _on_slider(self, value):
         self.compound_cycles_var.set(str(int(float(value))))
@@ -1018,62 +1742,71 @@ class ArbitrageApp:
     def _on_row_select(self, _event):
         if not self.last_output:
             return
-        sel = self.tree.selection()
+        sel = self.tree.tree.selection()
         if not sel:
             return
-        values = self.tree.item(sel[0], "values")
+        values = self.tree.tree.item(sel[0], "values")
         if not values:
             return
-
         idx = int(values[0]) - 1
         rows = self.all_scan_rows
         if idx < 0 or idx >= len(rows):
             return
-
         row = rows[idx]
-        plan = self.scanner.simulate_compound_plan(
-            initial_capital_usdt=self._to_positive_float(self.usdt_var.get(), "Capital"),
-            per_cycle_net_pct=row.profit_pct,
-            cycles=self._to_positive_int(self.compound_cycles_var.get(), "Ciclos"),
-            trigger_multiple=self._to_positive_float(self.compound_trigger_multiple_var.get(), "Trigger"),
-            compound_stake_pct=self._to_positive_float(self.compound_stake_pct_var.get(), "Stake"),
-            pre_trigger_stake_pct=1.0,
-        )
+        try:
+            plan = self.scanner.simulate_compound_plan(
+                initial_capital_usdt=self._to_positive_float(self.usdt_var.get(), "Capital"),
+                per_cycle_net_pct=row.profit_pct,
+                cycles=self._to_positive_int(self.compound_cycles_var.get(), "Ciclos"),
+                trigger_multiple=self._to_positive_float(self.compound_trigger_multiple_var.get(), "Trigger"),
+                compound_stake_pct=self._to_positive_float(self.compound_stake_pct_var.get(), "Stake"),
+                pre_trigger_stake_pct=1.0,
+            )
+            text = (
+                f"  Ruta        : {' → '.join(row.path)}\n"
+                f"  Símbolos    : {' / '.join(row.symbols)}\n"
+                f"  Ganancia    : {row.net_profit_usdt:.6f} USDT ({row.profit_pct:.4f}%)\n"
+                f"  Comisiones  : {row.total_fees_usdt:.6f} USDT\n\n"
+                f"  ── Simulación Compuesta ──────────────────────────\n"
+                f"  Capital final : {plan.current_capital:.4f} USDT\n"
+                f"  Ciclos        : {plan.cycles_simulated}\n"
+                f"  Trigger       : {'✓' if plan.trigger_reached else '✗'} (ciclo {plan.trigger_cycle})\n"
+                f"  Modo stake    : {plan.stake_mode}\n\n"
+            )
+            self.detail_text.delete("1.0", tk.END)
+            self.detail_text.insert("1.0", text)
+            self._render_ascii_chart()
+        except Exception:
+            pass
 
-        text = (
-            f"Ruta: {' -> '.join(row.path)}\n"
-            f"Símbolos: {' / '.join(row.symbols)}\n"
-            f"Ganancia neta limpia: {row.net_profit_usdt:.6f} USDT ({row.profit_pct:.4f}%)\n"
-            f"Comisiones: {row.total_fees_usdt:.6f} USDT\n\n"
-            f"Compuesto -> Capital final: {plan.current_capital:.4f} USDT\n"
-            f"Ciclos: {plan.cycles_simulated} | Trigger: {plan.trigger_reached} (ciclo {plan.trigger_cycle})\n"
-            f"Modo stake: {plan.stake_mode}\n\n"
-        )
-        self.detail_text.delete("1.0", tk.END)
-        self.detail_text.insert("1.0", text)
-        self._render_ascii_chart()
+    def _start_autoscan(self):
+        if self.running:
+            return
+        try:
+            self._get_autoscan_interval_ms()
+            self.running = True
+            self.statusbar.set(f"Auto-scan activo (cada {self.autoscan_interval_var.get()}s)", "info")
+            self._autoscan_loop()
+        except Exception as exc:
+            self.statusbar.set(f"Error auto-scan: {exc}", "error")
 
-    def _log_exec(self, line: str, level: str = "INFO"):
-        tag = "INFO"
-        if level.upper().startswith("WARN"):
-            tag = "WARN"
-        elif level.upper().startswith("ERR"):
-            tag = "ERROR"
-        self.execution_text.insert("end", f"{line}\n", tag)
-        self.execution_text.see("end")
+    def _stop_autoscan(self):
+        self.running = False
+        self.statusbar.set("Auto-scan detenido", "warn")
 
-    def _record_trade(self, symbol: str, signal: str, best_path: str, net_profit: float, mode: str, status: str):
-        ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-        row = (ts, symbol, signal, best_path, f"{net_profit:.6f}", mode, status)
-        self.executed_trades.append(row)
-        self.executed_trades = self.executed_trades[-300:]
+    def _autoscan_loop(self):
+        if not self.running:
+            return
+        self._scan_once()
+        self.root.after(self._get_autoscan_interval_ms(), self._autoscan_loop)
 
-        for item in self.trade_tree.get_children():
-            self.trade_tree.delete(item)
-        for item in self.executed_trades[-120:]:
-            self.trade_tree.insert("", "end", values=item)
+    def _get_autoscan_interval_ms(self) -> int:
+        seconds = self._to_positive_float(self.autoscan_interval_var.get(), "Auto-scan (s)")
+        return max(1000, int(seconds * 1000))
 
     def _run_binance_ai(self):
+        if self._busy:
+            return
         threading.Thread(target=self._run_binance_ai_worker, daemon=True).start()
 
     def _run_binance_ai_worker(self):
@@ -1082,89 +1815,221 @@ class ArbitrageApp:
             symbol = self.binance_symbol_var.get().strip().upper()
             interval = self.binance_interval_var.get().strip()
             limit = self._to_positive_int(self.binance_limit_var.get(), "Limit")
-            summary = self.ai_engine.run(symbol=symbol, interval=interval, limit=limit, exchange="binance")
-            self.root.after(0, lambda: self._log_exec(f"INFO | AI Binance | {summary}", "INFO"))
-            self.root.after(0, lambda: self.status_var.set(f"AI Binance OK: {summary['signal']}"))
-            self.root.after(0, lambda: self._toast(f"Señal IA: {summary['signal']}"))
-        except Exception as exc:  # noqa: BLE001
-            self.root.after(0, lambda: self._log_exec(f"ERROR | AI Binance | {exc}", "ERROR"))
-            self.root.after(0, lambda: self.status_var.set(f"Error AI Binance: {exc}"))
+            summary = self.ai_engine.run(symbol=symbol, interval=interval, limit=limit)
+            sig = summary["signal"]
+            self.root.after(0, lambda: self._log_exec(
+                f"AI Signal {symbol} @ {interval} → {sig} (p_up={summary['probability_up']:.3f})", "INFO"))
+            self.root.after(0, lambda: self.statusbar.set(f"IA OK · Señal: {sig}", "success"))
+            self.root.after(0, lambda: self.toast.show(f"Señal IA: {sig}", "success"))
+        except Exception as exc:
+            self.root.after(0, lambda: self._log_exec(f"Error AI: {exc}", "ERROR"))
+            self.root.after(0, lambda: self.statusbar.set(f"Error IA: {exc}", "error"))
         finally:
             self.root.after(0, lambda: self._set_busy(False))
 
-    def _run_unified_flow(self):
+    def _run_direct_market_order(self):
+        if self._busy:
+            return
         if self.binance_execute_var.get():
-            if not messagebox.askyesno("Confirmar", "¿Confirmas ejecución operativa (modo marcado)?"):
+            if not messagebox.askyesno("Confirmar", "¿Confirmas ejecución operativa?"):
                 return
-        threading.Thread(target=self._run_unified_flow_worker, daemon=True).start()
+        threading.Thread(target=self._run_direct_market_order_worker, daemon=True).start()
 
-    def _run_unified_flow_worker(self):
+    def _run_direct_market_order_worker(self):
         try:
             self.root.after(0, lambda: self._set_busy(True))
             symbol = self.binance_symbol_var.get().strip().upper()
-            interval = self.binance_interval_var.get().strip()
-            limit = self._to_positive_int(self.binance_limit_var.get(), "Limit")
             qty = self._to_positive_float(self.binance_qty_var.get(), "Qty")
             execute = self.binance_execute_var.get()
-
-            summary = self.ai_engine.run(symbol=symbol, interval=interval, limit=limit, exchange="binance")
-            self.root.after(0, lambda: self._log_exec(f"INFO | 1) Señal IA: {summary}", "INFO"))
-
             self.scanner.configure(
                 market_type=self.market_var.get().strip(),
                 testnet=self.binance_testnet_var.get(),
-                fee_rate=float(self.fee_var.get()),
+                fee_rate=self._to_non_negative_float(self.fee_var.get(), "Fee"),
             )
             scan = self.scanner.scan(
-                start_usdt=qty,
-                max_paths=5,
+                start_usdt=qty, max_paths=3,
                 max_assets=self._to_positive_int(self.max_assets_var.get(), "Max assets"),
-                min_clean_profit_usdt=float(self.min_clean_profit_var.get()),
+                min_clean_profit_usdt=self._to_non_negative_float(self.min_clean_profit_var.get(), "Min profit"),
             )
-
             if scan.opportunities:
                 best = scan.opportunities[0]
-                path = " -> ".join(best.path)
+                path = " → ".join(best.path)
                 net = best.net_profit_usdt
-                self.root.after(0, lambda: self._log_exec(f"INFO | 2) Mejor ruta: {path} | net={net:.6f} USDT", "INFO"))
-                status = "OK"
+                status = "OK" if net > 0 else "NO_RENTABLE"
             else:
-                path = "N/A"
-                net = 0.0
-                self.root.after(0, lambda: self._log_exec("WARN | 2) Sin rutas limpias", "WARN"))
-                status = "SIN_RUTAS"
+                path, net, status = "N/A", 0.0, "SIN_RUTAS"
 
-            mode = "OPERATIVO" if execute else "SIM"
-            self.root.after(0, lambda: self._record_trade(symbol, summary["signal"], path, net, mode, status))
-            self.root.after(0, lambda: self._log_exec(f"INFO | 3) Registro trader guardado. mode={mode}", "INFO"))
-            self.root.after(0, lambda: self.status_var.set(f"Flujo unificado OK ({summary['signal']})"))
-            self.root.after(0, lambda: self._toast("Flujo unificado completado"))
-        except Exception as exc:  # noqa: BLE001
-            self.root.after(0, lambda: self._log_exec(f"ERROR | Flujo unificado | {exc}", "ERROR"))
-            self.root.after(0, lambda: self.status_var.set(f"Error flujo unificado: {exc}"))
+            if net <= 0 or status != "OK":
+                self.root.after(0, lambda: self.statusbar.set("Orden omitida — ganancia insuficiente", "warn"))
+                return
+
+            mode = "MERCADO" if execute else "SIM_MERCADO"
+            self.root.after(0, lambda: self._log_exec(f"Orden mercado · {path} · net={net:.6f} USDT", "OK"))
+            self.root.after(0, lambda: self._record_trade(symbol, "MARKET", path, net, mode, "OK"))
+            self.root.after(0, lambda: self.statusbar.set("Orden registrada con ganancia limpia", "success"))
+            self.root.after(0, lambda: self.toast.show("Orden de mercado registrada", "success"))
+        except Exception as exc:
+            self.root.after(0, lambda: self._log_exec(f"Error orden mercado: {exc}", "ERROR"))
+            self.root.after(0, lambda: self.statusbar.set(f"Error: {exc}", "error"))
         finally:
             self.root.after(0, lambda: self._set_busy(False))
 
-    def _autoscan_loop(self):
-        if not self.running:
-            return
-        self._scan_once()
-        self.root.after(5000, self._autoscan_loop)
+    def _record_trade(self, symbol, signal, best_path, net_profit, mode, status):
+        ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+        row = (ts, symbol, signal, best_path, f"{net_profit:.6f}", mode, status)
+        self.executed_trades.append(row)
+        self.executed_trades = self.executed_trades[-300:]
+        self.trade_tree.clear()
+        for item in self.executed_trades[-120:]:
+            self.trade_tree.insert(values=item)
+        self._append_profit_row(ts, symbol, net_profit, status)
+        self._update_execution_kpis()
 
-    def _start_autoscan(self):
-        if self.running:
-            return
-        self.running = True
-        self.status_var.set("Auto-scan activado (cada 5s)")
-        self._autoscan_loop()
+    def _append_profit_row(self, ts, symbol, net_profit, status):
+        cumulative = 0.0
+        for item in self.profit_tree.tree.get_children():
+            vals = self.profit_tree.tree.item(item, "values")
+            if vals:
+                try:
+                    cumulative = float(vals[3])
+                except Exception:
+                    pass
+        cumulative += net_profit
+        row = (ts, symbol, f"{net_profit:.6f}", f"{cumulative:.6f}", status)
+        tags = ("profit",) if net_profit >= 0 else ("loss",)
+        self.profit_tree.insert(values=row, tags=tags)
 
-    def _stop_autoscan(self):
-        self.running = False
-        self.status_var.set("Auto-scan detenido")
+    def _update_execution_kpis(self):
+        count = len(self.executed_trades)
+        self.kpi_exec_trades.set(str(count))
+        total_profit, success = 0.0, 0
+        for r in self.executed_trades:
+            try:
+                net = float(r[4])
+            except Exception:
+                net = 0.0
+            total_profit += net
+            if net > 0:
+                success += 1
+        self.kpi_exec_success.set(f"{(success/count*100):.2f}%" if count else "—")
+        self.kpi_exec_profit.set(f"{total_profit:.6f}")
+
+    def _toggle_secret_visibility(self):
+        if hasattr(self, "api_secret_entry"):
+            self.api_secret_entry.configure(show="" if self.show_secret_var.get() else "*")
+
+    def _clear_keys(self):
+        self.api_key_var.set("")
+        self.api_secret_var.set("")
+        self.save_keys_var.set(False)
+        self.toast.show("Claves limpiadas", "warn")
+
+    def _clear_scan_results(self):
+        self.all_scan_rows = []
+        self.last_output = None
+        self.tree.clear()
+        self.kpi_scan_ms.set("—")
+        self.kpi_success.set("—")
+        self.kpi_best.set("—")
+        self.kpi_avg.set("—")
+        self.kpi_vars["opportunities"].set("0")
+
+    def _clear_history(self):
+        self.scan_history = []
+        self.hist_tree.clear()
+        self._clear_detail()
+
+    def _clear_detail(self):
+        self.detail_text.delete("1.0", tk.END)
+
+    def _clear_exec_log(self):
+        if hasattr(self, "activity_log"):
+            self.activity_log.clear()
+
+    def _clear_trades(self):
+        self.executed_trades = []
+        self.trade_tree.clear()
+        self.profit_tree.clear()
+        self.kpi_exec_trades.set("0")
+        self.kpi_exec_success.set("—")
+        self.kpi_exec_profit.set("0.000000")
+
+    def _copy_config(self):
+        data = {
+            "market": self.market_var.get(),
+            "network": self.network_var.get(),
+            "usdt": self.usdt_var.get(),
+            "fee": self.fee_var.get(),
+            "max_assets": self.max_assets_var.get(),
+        }
+        self.root.clipboard_clear()
+        self.root.clipboard_append(json.dumps(data, ensure_ascii=False, indent=2))
+        self.toast.show("Configuración copiada", "info")
+
+    def _save_config(self):
+        try:
+            api_key = self.api_key_var.get().strip() if self.save_keys_var.get() else ""
+            api_secret = self.api_secret_var.get().strip() if self.save_keys_var.get() else ""
+            payload = {
+                "api_key": api_key, "api_secret": api_secret,
+                "market": self.market_var.get().strip(), "network": self.network_var.get().strip(),
+                "usdt": self.usdt_var.get().strip(), "fee": self.fee_var.get().strip(),
+                "max_assets": self.max_assets_var.get().strip(),
+                "min_clean_profit": self.min_clean_profit_var.get().strip(),
+                "compound_cycles": self.compound_cycles_var.get().strip(),
+                "compound_trigger_multiple": self.compound_trigger_multiple_var.get().strip(),
+                "compound_stake_pct": self.compound_stake_pct_var.get().strip(),
+                "binance_symbol": self.binance_symbol_var.get().strip(),
+                "binance_qty": self.binance_qty_var.get().strip(),
+                "binance_interval": self.binance_interval_var.get().strip(),
+                "binance_limit": self.binance_limit_var.get().strip(),
+                "binance_testnet": self.binance_testnet_var.get(),
+                "binance_execute": self.binance_execute_var.get(),
+                "autoscan_seconds": self.autoscan_interval_var.get().strip(),
+                "save_keys": self.save_keys_var.get(),
+            }
+            CONFIG_PATH.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+            self.statusbar.set("Configuración guardada", "success")
+            self.toast.show("Configuración guardada", "success")
+        except Exception as exc:
+            self.statusbar.set(f"Error guardando: {exc}", "error")
+            messagebox.showerror("Error", str(exc))
+
+    def _load_config(self):
+        if not CONFIG_PATH.exists():
+            return
+        try:
+            payload = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+            self.api_key_var.set(payload.get("api_key", ""))
+            self.api_secret_var.set(payload.get("api_secret", ""))
+            self.market_var.set(payload.get("market", "spot"))
+            self.network_var.set(payload.get("network", "testnet"))
+            self.usdt_var.set(payload.get("usdt", "100.00"))
+            self.fee_var.set(payload.get("fee", "0.001"))
+            self.max_assets_var.set(payload.get("max_assets", "120"))
+            self.min_clean_profit_var.set(payload.get("min_clean_profit", "0.01"))
+            self.compound_cycles_var.set(payload.get("compound_cycles", "50"))
+            self.compound_trigger_multiple_var.set(payload.get("compound_trigger_multiple", "2.0"))
+            self.compound_stake_pct_var.set(payload.get("compound_stake_pct", "0.10"))
+            self.binance_symbol_var.set(payload.get("binance_symbol", "BTCUSDT"))
+            self.binance_qty_var.set(payload.get("binance_qty", "100.00"))
+            self.binance_interval_var.set(payload.get("binance_interval", "1m"))
+            self.binance_limit_var.set(payload.get("binance_limit", "300"))
+            self.binance_testnet_var.set(bool(payload.get("binance_testnet", True)))
+            self.binance_execute_var.set(bool(payload.get("binance_execute", False)))
+            self.autoscan_interval_var.set(str(payload.get("autoscan_seconds", "5")))
+            self.save_keys_var.set(bool(payload.get("save_keys", False)))
+            self.statusbar.set("Configuración cargada", "info")
+        except Exception as exc:
+            self.statusbar.set(f"Error cargando config: {exc}", "warn")
 
 
 def main():
     root = tk.Tk()
+    try:
+        root.tk.call("tk", "scaling", 1.0)
+    except Exception:
+        pass
     ArbitrageApp(root)
     root.mainloop()
 
