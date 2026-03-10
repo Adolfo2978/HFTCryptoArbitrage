@@ -10,7 +10,7 @@ import tkinter as tk
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from tkinter import messagebox, ttk
+from tkinter import filedialog, messagebox, ttk
 from typing import Dict, List, Optional, Tuple
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
@@ -1092,6 +1092,9 @@ class PageScanner(tk.Frame):
         b_clr = GlowButton(btn_row, "Limpiar", command=self.app._clear_scan_results,
                            style="ghost", width=90, icon="✕")
         b_clr.pack(side="left", padx=3)
+        b_exp = GlowButton(btn_row, "Export CSV", command=self.app._export_scan_csv,
+                           style="ghost", width=120, icon="⬇")
+        b_exp.pack(side="left", padx=3)
         self.app._controls_disable_on_busy += [b_scan, b_on]
 
         # ── Scan progress bar ────────────────────────────────────────
@@ -1417,6 +1420,8 @@ class PageExec(tk.Frame):
                    style="ghost", width=110).pack(side="left", padx=3)
         GlowButton(btn_row, "Limpiar tabla", command=self.app._clear_trades,
                    style="ghost", width=110).pack(side="left", padx=3)
+        GlowButton(btn_row, "Export Trades", command=self.app._export_trades_csv,
+                   style="ghost", width=130).pack(side="left", padx=3)
         self.app._controls_disable_on_busy += [self.app.btn_ai, self.app.btn_market]
 
         kpi_row = tk.Frame(self, bg=COLORS["bg"], padx=16, pady=10)
@@ -1538,6 +1543,7 @@ class ArbitrageApp:
         }
 
     def _build_ui(self):
+        self._build_menu_bar()
         self.root.columnconfigure(1, weight=1)
         self.root.rowconfigure(0, weight=1)
         self.root.rowconfigure(1, weight=0)
@@ -1572,8 +1578,35 @@ class ArbitrageApp:
             if k == key:
                 page.tkraise()
 
+
+    def _build_menu_bar(self):
+        menubar = tk.Menu(self.root)
+
+        file_menu = tk.Menu(menubar, tearoff=0)
+        file_menu.add_command(label="Guardar configuración", command=self._save_config, accelerator="Ctrl+S")
+        file_menu.add_command(label="Exportar scan CSV", command=self._export_scan_csv)
+        file_menu.add_command(label="Exportar trades CSV", command=self._export_trades_csv)
+        file_menu.add_separator()
+        file_menu.add_command(label="Salir", command=self.root.quit)
+        menubar.add_cascade(label="Archivo", menu=file_menu)
+
+        tools_menu = tk.Menu(menubar, tearoff=0)
+        tools_menu.add_command(label="Escanear ahora", command=self._scan_once, accelerator="F5")
+        tools_menu.add_command(label="Iniciar auto-scan", command=self._start_autoscan)
+        tools_menu.add_command(label="Detener auto-scan", command=self._stop_autoscan, accelerator="Esc")
+        tools_menu.add_separator()
+        tools_menu.add_command(label="Diagnóstico del sistema", command=self._run_system_diagnostics)
+        menubar.add_cascade(label="Herramientas", menu=tools_menu)
+
+        help_menu = tk.Menu(menubar, tearoff=0)
+        help_menu.add_command(label="Acerca de", command=lambda: messagebox.showinfo("HFTCryptoArbitrage", "Sistema unificado GUI\nScanner + IA + Ejecución"))
+        menubar.add_cascade(label="Ayuda", menu=help_menu)
+
+        self.root.config(menu=menubar)
+
     def _setup_keyboard_shortcuts(self):
         self.root.bind_all("<Control-s>", lambda _: self._save_config())
+        self.root.bind_all("<Control-e>", lambda _: self._export_scan_csv())
         self.root.bind_all("<F5>", lambda _: self._scan_once())
         self.root.bind_all("<Escape>", lambda _: self._stop_autoscan())
 
@@ -1976,6 +2009,70 @@ class ArbitrageApp:
         self.kpi_exec_trades.set("0")
         self.kpi_exec_success.set("—")
         self.kpi_exec_profit.set("0.000000")
+
+
+    def _export_scan_csv(self):
+        rows = self.filtered_scan_rows if self.filtered_scan_rows else self.all_scan_rows
+        if not rows:
+            self.statusbar.set("No hay resultados de scan para exportar", "warn")
+            return
+        path = filedialog.asksaveasfilename(
+            title="Exportar scan",
+            defaultextension=".csv",
+            filetypes=[("CSV", "*.csv")],
+            initialfile="scan_results.csv",
+        )
+        if not path:
+            return
+        try:
+            with open(path, "w", encoding="utf-8", newline="") as f:
+                f.write("rank,path,symbols,net_profit,fees,gross_final,net_final,profit_pct\n")
+                for i, row in enumerate(rows, start=1):
+                    f.write(
+                        f'{i},"{" → ".join(row.path)}","{" / ".join(row.symbols)}",'
+                        f'{row.net_profit_usdt:.6f},{row.total_fees_usdt:.6f},'
+                        f'{row.gross_final_usdt:.6f},{row.final_usdt:.6f},{row.profit_pct:.4f}\n'
+                    )
+            self.statusbar.set("CSV de scan exportado", "success")
+            self.toast.show("Scan exportado a CSV", "success")
+        except Exception as exc:
+            self.statusbar.set(f"Error exportando scan: {exc}", "error")
+
+    def _export_trades_csv(self):
+        if not self.executed_trades:
+            self.statusbar.set("No hay trades para exportar", "warn")
+            return
+        path = filedialog.asksaveasfilename(
+            title="Exportar trades",
+            defaultextension=".csv",
+            filetypes=[("CSV", "*.csv")],
+            initialfile="trades_history.csv",
+        )
+        if not path:
+            return
+        try:
+            with open(path, "w", encoding="utf-8", newline="") as f:
+                f.write("timestamp,symbol,signal,best_path,net_profit,mode,status\n")
+                for r in self.executed_trades:
+                    f.write(f'"{r[0]}","{r[1]}","{r[2]}","{r[3]}",{r[4]},"{r[5]}","{r[6]}"\n')
+            self.statusbar.set("CSV de trades exportado", "success")
+            self.toast.show("Trades exportados a CSV", "success")
+        except Exception as exc:
+            self.statusbar.set(f"Error exportando trades: {exc}", "error")
+
+    def _run_system_diagnostics(self):
+        try:
+            self._configure_scanner()
+            market = self.market_var.get().strip().upper()
+            network = self.network_var.get().strip().upper()
+            book = self.scanner.fetch_book_tickers()
+            price_count = len(book)
+            self.statusbar.set(f"Diagnóstico OK · {market}/{network} · tickers: {price_count}", "success")
+            self.toast.show("Diagnóstico completado", "success")
+            self._log_exec(f"Diagnóstico: mercado={market}, red={network}, tickers={price_count}", "OK")
+        except Exception as exc:
+            self.statusbar.set(f"Diagnóstico falló: {exc}", "error")
+            self._log_exec(f"Diagnóstico falló: {exc}", "ERROR")
 
     def _copy_config(self):
         data = {
